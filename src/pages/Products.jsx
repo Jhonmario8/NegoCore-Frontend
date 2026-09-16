@@ -172,50 +172,89 @@ export default function Products() {
           ) : !products || products.length === 0 ? (
             <EmptyState title="Sin productos" description="Crea tu primer producto para empezar a vender." />
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Precio venta</th>
-                  <th>Stock</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <table className="table products-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Precio venta</th>
+                    <th>Stock</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p) => {
+                    const low = p.stock <= p.minStockAlert;
+                    return (
+                      <tr key={p.id}>
+                        <td>
+                          <button
+                            onClick={() => openImageModal(p)}
+                            style={{ border: "none", background: "none", cursor: "pointer", padding: 0 }}
+                            title="Cambiar foto"
+                          >
+                            <ProductThumb url={p.imageUrl} />
+                          </button>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{p.name}</div>
+                          {p.sku && <div style={{ fontSize: 11.5, color: "var(--color-text-muted)" }}>SKU: {p.sku}</div>}
+                        </td>
+                        <td>{categoryName(p.categoryId)}</td>
+                        <td>{formatMoney(p.salePrice, activeBusiness?.currency)}</td>
+                        <td>
+                          {p.stock} {low && <Badge tone="warning">Stock bajo</Badge>}
+                        </td>
+                        <td>
+                          <IconButton onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }} title="Ajustar stock">
+                            <EditIcon width={15} height={15} />
+                          </IconButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <div className="product-cards">
                 {products.map((p) => {
                   const low = p.stock <= p.minStockAlert;
                   return (
-                    <tr key={p.id}>
-                      <td>
-                        <button
-                          onClick={() => openImageModal(p)}
-                          style={{ border: "none", background: "none", cursor: "pointer", padding: 0 }}
-                          title="Cambiar foto"
-                        >
-                          <ProductThumb url={p.imageUrl} />
-                        </button>
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{p.name}</div>
-                        {p.sku && <div style={{ fontSize: 11.5, color: "var(--color-text-muted)" }}>SKU: {p.sku}</div>}
-                      </td>
-                      <td>{categoryName(p.categoryId)}</td>
-                      <td>{formatMoney(p.salePrice, activeBusiness?.currency)}</td>
-                      <td>
-                        {p.stock} {low && <Badge tone="warning">Stock bajo</Badge>}
-                      </td>
-                      <td>
-                        <IconButton onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }} title="Ajustar stock">
-                          <EditIcon width={15} height={15} />
-                        </IconButton>
-                      </td>
-                    </tr>
+                    <div className="product-card-row" key={p.id}>
+                      <button
+                        onClick={() => openImageModal(p)}
+                        className="product-card-thumb-btn"
+                        title="Cambiar foto"
+                      >
+                        <ProductThumb url={p.imageUrl} size={56} />
+                      </button>
+                      <div className="product-card-info">
+                        <div className="product-card-top">
+                          <span className="name">{p.name}</span>
+                          <IconButton
+                            onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }}
+                            title="Ajustar stock"
+                          >
+                            <EditIcon width={14} height={14} />
+                          </IconButton>
+                        </div>
+                        <div className="meta">
+                          {p.sku ? `SKU: ${p.sku} · ` : ""}{categoryName(p.categoryId)}
+                        </div>
+                        <div className="product-card-bottom">
+                          <span className="price">{formatMoney(p.salePrice, activeBusiness?.currency)}</span>
+                          <span className="stock-info">
+                            {low ? <Badge tone="warning">Stock bajo</Badge> : `${p.stock} disponibles`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </Card>
       </div>
