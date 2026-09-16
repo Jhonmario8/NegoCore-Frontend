@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { BusinessProvider } from "./context/BusinessContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -25,7 +25,7 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <BusinessProvider>
-          <BrowserRouter>
+          <HashRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -62,7 +62,7 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
-          </BrowserRouter>
+          </HashRouter>
         </BusinessProvider>
       </AuthProvider>
     </ToastProvider>

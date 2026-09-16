@@ -220,11 +220,12 @@ export default function Cotizaciones() {
                 Descargar imagen
               </Button>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", background: "var(--color-bg)", padding: 20, borderRadius: 12 }}>
+            <div style={{ display: "flex", justifyContent: "center", background: "var(--color-bg)", padding: 20, borderRadius: 12, overflowX: "auto" }}>
               <div
                 ref={receiptRef}
                 style={{
                   width: 640,
+                  flexShrink: 0,
                   background: "#ffffff",
                   color: "#1a1a1a",
                   padding: "36px 40px",
