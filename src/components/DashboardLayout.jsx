@@ -14,6 +14,7 @@ const NAV = [
   { to: "/app/providers", label: "Proveedores", icon: TruckIcon },
   { to: "/app/sales", label: "Ventas", icon: CartIcon },
   { to: "/app/purchases", label: "Compras", icon: WalletIcon },
+  { to: "/app/cotizaciones", label: "Cotizaciones", icon: ReceiptIcon },
   { to: "/app/expenses", label: "Gastos", icon: ReceiptIcon },
   { to: "/app/debts", label: "Cuentas", icon: AlertIcon },
   { to: "/app/audit-logs", label: "Auditoría", icon: HistoryIcon },

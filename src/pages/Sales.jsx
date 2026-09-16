@@ -3,12 +3,14 @@ import PageHeader from "../components/PageHeader";
 import { catalogApi } from "../api/catalog";
 import { clientsApi } from "../api/crm";
 import { salesApi } from "../api/sales";
+import { financeApi } from "../api/finance";
 import { useBusiness } from "../context/BusinessContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
   Button, Card, EmptyState, Field, Input, Select, PageLoading, Badge, Modal, SearchIcon,
 } from "../components/ui";
+import PaymentModal from "../components/PaymentModal";
 import { formatMoney, formatDateTime, errorMessage, resolveImageUrl } from "../utils/format";
 import { ImageIcon } from "../components/ui";
 
@@ -220,8 +222,28 @@ function SalesHistory({ businessId, currency, refreshKey }) {
     }),
     [filters.status, filters.clientId, filters.from, filters.to, refreshKey]
   );
+  const { data: debts, reload: reloadDebts } = useBusinessData((id) => financeApi.listDebts(id), [refreshKey]);
+  const debtsBySaleId = useMemo(() => {
+    const map = new Map();
+    (debts || []).forEach((d) => {
+      if (d.saleId) map.set(d.saleId, d);
+    });
+    return map;
+  }, [debts]);
+
+  function effectivePaidAmount(sale) {
+    const debt = debtsBySaleId.get(sale.id);
+    return debt ? debt.paidAmount : sale.paidAmount;
+  }
+  function effectiveStatus(sale) {
+    if (sale.status === "CANCELLED") return "CANCELLED";
+    return effectivePaidAmount(sale) >= sale.total ? "PAID" : "PARTIAL";
+  }
+
   const [detail, setDetail] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [showPay, setShowPay] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   async function openDetail(saleId) {
     try {
@@ -229,6 +251,23 @@ function SalesHistory({ businessId, currency, refreshKey }) {
       setDetail(res);
     } catch (err) {
       notify.error(errorMessage(err));
+    }
+  }
+
+  async function handlePay({ amount, paymentMethod: method }) {
+    const debt = debtsBySaleId.get(detail.sale.id);
+    setPaying(true);
+    try {
+      await financeApi.payDebt(businessId, debt.id, { amount, paymentMethod: method });
+      notify.success("Abono registrado.");
+      setShowPay(false);
+      reload();
+      reloadDebts();
+      openDetail(detail.sale.id);
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setPaying(false);
     }
   }
 
@@ -274,9 +313,9 @@ function SalesHistory({ businessId, currency, refreshKey }) {
                 <tr key={s.id} style={{ cursor: "pointer" }} onClick={() => openDetail(s.id)}>
                   <td>{formatDateTime(s.createdAt)}</td>
                   <td>{formatMoney(s.total, currency)}</td>
-                  <td>{formatMoney(s.paidAmount, currency)}</td>
+                  <td>{formatMoney(effectivePaidAmount(s), currency)}</td>
                   <td>{s.paymentMethod}</td>
-                  <td><Badge tone={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</Badge></td>
+                  <td><Badge tone={STATUS_TONE[effectiveStatus(s)]}>{STATUS_LABEL[effectiveStatus(s)]}</Badge></td>
                   <td style={{ color: "var(--color-secondary)", fontWeight: 600, fontSize: 12.5 }}>Ver</td>
                 </tr>
               ))}
@@ -285,39 +324,65 @@ function SalesHistory({ businessId, currency, refreshKey }) {
         )}
       </Card>
 
-      {detail && (
-        <Modal
-          title={`Venta #${detail.sale.id}`}
-          onClose={() => setDetail(null)}
-          footer={
-            detail.sale.status !== "CANCELLED" && (
-              <Button variant="danger" loading={cancelling} onClick={handleCancel}>
-                Cancelar venta
-              </Button>
-            )
-          }
-        >
-          <div style={{ marginBottom: 10 }}>
-            <Badge tone={STATUS_TONE[detail.sale.status]}>{STATUS_LABEL[detail.sale.status]}</Badge>
-          </div>
-          <table className="table">
-            <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
-            <tbody>
-              {detail.items.map((i) => (
-                <tr key={i.id}>
-                  <td>#{i.productId}</td>
-                  <td>{i.quantity}</td>
-                  <td>{formatMoney(i.unitPrice, currency)}</td>
-                  <td>{formatMoney(i.subtotal, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 12 }}>
-            <span>Total</span>
-            <span>{formatMoney(detail.sale.total, currency)}</span>
-          </div>
-        </Modal>
+      {detail && (() => {
+        const status = effectiveStatus(detail.sale);
+        const paid = effectivePaidAmount(detail.sale);
+        const pending = detail.sale.total - paid;
+        const canPay = status === "PARTIAL" && pending > 0;
+        return (
+          <Modal
+            title={`Venta #${detail.sale.id}`}
+            onClose={() => setDetail(null)}
+            footer={
+              detail.sale.status !== "CANCELLED" && (
+                <>
+                  {canPay && (
+                    <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
+                  )}
+                  <Button variant="danger" loading={cancelling} onClick={handleCancel}>
+                    Cancelar venta
+                  </Button>
+                </>
+              )
+            }
+          >
+            <div style={{ marginBottom: 10 }}>
+              <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            </div>
+            <table className="table">
+              <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
+              <tbody>
+                {detail.items.map((i) => (
+                  <tr key={i.id}>
+                    <td>#{i.productId}</td>
+                    <td>{i.quantity}</td>
+                    <td>{formatMoney(i.unitPrice, currency)}</td>
+                    <td>{formatMoney(i.subtotal, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 12 }}>
+              <span>Total</span>
+              <span>{formatMoney(detail.sale.total, currency)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, color: "var(--color-text-muted)", fontSize: 13 }}>
+              <span>Pagado</span>
+              <span>{formatMoney(paid, currency)}</span>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {showPay && detail && (
+        <PaymentModal
+          title={`Abono a venta #${detail.sale.id}`}
+          pendingAmount={detail.sale.total - effectivePaidAmount(detail.sale)}
+          currency={currency}
+          saving={paying}
+          onClose={() => setShowPay(false)}
+          onSubmit={handlePay}
+        />
       )}
     </>
   );

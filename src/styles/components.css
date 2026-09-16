@@ -53,7 +53,7 @@
   max-width: 200px;
 }
 .business-switcher select:hover { border-color: var(--color-border-strong); }
-.business-switcher select option { color: #0F172A; }
+.business-switcher select option { color: var(--color-text); background: var(--color-surface-raised); }
 
 .user-menu {
   display: flex;

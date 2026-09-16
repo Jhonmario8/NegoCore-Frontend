@@ -15,6 +15,7 @@ import Clients from "./pages/Clients";
 import Providers from "./pages/Providers";
 import Sales from "./pages/Sales";
 import Purchases from "./pages/Purchases";
+import Cotizaciones from "./pages/Cotizaciones";
 import Expenses from "./pages/Expenses";
 import Debts from "./pages/Debts";
 import AuditLogs from "./pages/AuditLogs";
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="providers" element={<Providers />} />
                 <Route path="sales" element={<Sales />} />
                 <Route path="purchases" element={<Purchases />} />
+                <Route path="cotizaciones" element={<Cotizaciones />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="debts" element={<Debts />} />
                 <Route path="audit-logs" element={<AuditLogs />} />

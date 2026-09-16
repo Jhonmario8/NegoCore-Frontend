@@ -66,10 +66,10 @@ async function request(path, { method = "GET", body, params, auth = true } = {})
 }
 
 export const api = {
-  get: (path, params) => request(path, { method: "GET", params }),
-  post: (path, body) => request(path, { method: "POST", body }),
-  patch: (path, body) => request(path, { method: "PATCH", body }),
-  del: (path) => request(path, { method: "DELETE" }),
+  get: (path, params, opts) => request(path, { method: "GET", params, ...opts }),
+  post: (path, body, opts) => request(path, { method: "POST", body, ...opts }),
+  patch: (path, body, opts) => request(path, { method: "PATCH", body, ...opts }),
+  del: (path, opts) => request(path, { method: "DELETE", ...opts }),
 };
 
 export { ApiError, getToken };
