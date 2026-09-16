@@ -3,7 +3,7 @@ import PageHeader from "../components/PageHeader";
 import { catalogApi } from "../api/catalog";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
-import { Button, Card, EmptyState, Field, Input, Modal, PageLoading } from "../components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, PageLoading, Badge } from "../components/ui";
 import { errorMessage, formatDate } from "../utils/format";
 import { PlusIcon } from "../components/ui";
 
@@ -48,24 +48,38 @@ export default function Categories() {
           ) : !data || data.length === 0 ? (
             <EmptyState title="Sin categorías todavía" description="Crea la primera para empezar a organizar tu catálogo." />
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Estado</th>
-                  <th>Creada</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ fontWeight: 600 }}>{c.name}</td>
-                    <td>{c.active ? "Activa" : "Inactiva"}</td>
-                    <td>{formatDate(c.createdAt)}</td>
+            <>
+              <table className="table data-table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Creada</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {data.map((c) => (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 600 }}>{c.name}</td>
+                      <td>{c.active ? "Activa" : "Inactiva"}</td>
+                      <td>{formatDate(c.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="list-cards">
+                {data.map((c) => (
+                  <div className="list-card-row" key={c.id}>
+                    <div className="list-card-main">
+                      <div className="list-card-title">{c.name}</div>
+                      <div className="list-card-meta">Creada: {formatDate(c.createdAt)}</div>
+                    </div>
+                    <Badge tone={c.active ? "success" : "neutral"}>{c.active ? "Activa" : "Inactiva"}</Badge>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </Card>
       </div>

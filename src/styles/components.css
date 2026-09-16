@@ -458,3 +458,33 @@ table.table tr:hover td { background: var(--color-surface-hover); }
   .products-table { display: none; }
   .product-cards { display: flex; }
 }
+
+/* ---------- Generic mobile list cards (categorías, clientes, proveedores, gastos, cuentas, compras) ---------- */
+.list-cards { display: none; flex-direction: column; gap: 10px; }
+
+.list-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.list-card-row.tappable { cursor: pointer; }
+
+.list-card-main { flex: 1; min-width: 0; }
+.list-card-title { font-weight: 700; font-size: 14.5px; color: var(--color-text); }
+.list-card-meta { font-size: 12px; color: var(--color-text-muted); margin-top: 3px; }
+
+.list-card-side {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0;
+}
+.list-card-value { font-weight: 800; font-size: 14.5px; color: var(--color-text); white-space: nowrap; }
+
+.list-card-chevron { color: var(--color-text-muted); flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .data-table { display: none; }
+  .list-cards { display: flex; }
+}

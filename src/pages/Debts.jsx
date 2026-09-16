@@ -80,32 +80,57 @@ function Receivables() {
         ) : !debts || debts.length === 0 ? (
           <EmptyState title="Nadie te debe nada" description="Las deudas se crean automáticamente al vender a crédito." />
         ) : (
-          <table className="table">
-            <thead><tr><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
-            <tbody>
+          <>
+            <table className="table data-table">
+              <thead><tr><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                {debts.map((d) => {
+                  const pending = d.totalAmount - d.paidAmount;
+                  const canPay = d.status === "PENDING" || d.status === "PARTIAL";
+                  return (
+                    <tr key={d.id}>
+                      <td style={{ fontWeight: 600 }}>{clientName(d.clientId)}</td>
+                      <td>{formatMoney(d.totalAmount, activeBusiness?.currency)}</td>
+                      <td>{formatMoney(d.paidAmount, activeBusiness?.currency)}</td>
+                      <td>{formatMoney(pending, activeBusiness?.currency)}</td>
+                      <td>{formatDate(d.dueDate)}</td>
+                      <td><Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge></td>
+                      <td>
+                        {canPay && (
+                          <Button variant="secondary" size="sm" onClick={() => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
+                            Registrar abono
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="list-cards">
               {debts.map((d) => {
                 const pending = d.totalAmount - d.paidAmount;
                 const canPay = d.status === "PENDING" || d.status === "PARTIAL";
                 return (
-                  <tr key={d.id}>
-                    <td style={{ fontWeight: 600 }}>{clientName(d.clientId)}</td>
-                    <td>{formatMoney(d.totalAmount, activeBusiness?.currency)}</td>
-                    <td>{formatMoney(d.paidAmount, activeBusiness?.currency)}</td>
-                    <td>{formatMoney(pending, activeBusiness?.currency)}</td>
-                    <td>{formatDate(d.dueDate)}</td>
-                    <td><Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge></td>
-                    <td>
-                      {canPay && (
-                        <Button variant="secondary" size="sm" onClick={() => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
-                          Registrar abono
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
+                  <div
+                    className={`list-card-row ${canPay ? "tappable" : ""}`}
+                    key={d.id}
+                    onClick={canPay ? () => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); } : undefined}
+                  >
+                    <div className="list-card-main">
+                      <div className="list-card-title">{clientName(d.clientId)}</div>
+                      <div className="list-card-meta">Vence: {formatDate(d.dueDate)} · Abonado {formatMoney(d.paidAmount, activeBusiness?.currency)}</div>
+                    </div>
+                    <div className="list-card-side">
+                      <span className="list-card-value">{formatMoney(pending, activeBusiness?.currency)}</span>
+                      <Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </Card>
 
@@ -214,33 +239,58 @@ function Payables() {
         ) : !payables || payables.length === 0 ? (
           <EmptyState title="No debes nada" description="Las cuentas por pagar se crean desde una compra a crédito o un gasto marcado como no pagado." />
         ) : (
-          <table className="table">
-            <thead><tr><th>A quién</th><th>Origen</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
-            <tbody>
+          <>
+            <table className="table data-table">
+              <thead><tr><th>A quién</th><th>Origen</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                {payables.map((p) => {
+                  const pending = p.totalAmount - p.paidAmount;
+                  const canPay = p.status === "PENDING" || p.status === "PARTIAL";
+                  return (
+                    <tr key={p.id}>
+                      <td style={{ fontWeight: 600 }}>{payeeLabel(p)}</td>
+                      <td>{p.source === "PURCHASE" ? "Compra" : "Gasto"}</td>
+                      <td>{formatMoney(p.totalAmount, activeBusiness?.currency)}</td>
+                      <td>{formatMoney(p.paidAmount, activeBusiness?.currency)}</td>
+                      <td>{formatMoney(pending, activeBusiness?.currency)}</td>
+                      <td>{formatDate(p.dueDate)}</td>
+                      <td><Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge></td>
+                      <td>
+                        {canPay && (
+                          <Button variant="secondary" size="sm" onClick={() => { setPayTarget(p); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
+                            Registrar pago
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="list-cards">
               {payables.map((p) => {
                 const pending = p.totalAmount - p.paidAmount;
                 const canPay = p.status === "PENDING" || p.status === "PARTIAL";
                 return (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 600 }}>{payeeLabel(p)}</td>
-                    <td>{p.source === "PURCHASE" ? "Compra" : "Gasto"}</td>
-                    <td>{formatMoney(p.totalAmount, activeBusiness?.currency)}</td>
-                    <td>{formatMoney(p.paidAmount, activeBusiness?.currency)}</td>
-                    <td>{formatMoney(pending, activeBusiness?.currency)}</td>
-                    <td>{formatDate(p.dueDate)}</td>
-                    <td><Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge></td>
-                    <td>
-                      {canPay && (
-                        <Button variant="secondary" size="sm" onClick={() => { setPayTarget(p); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
-                          Registrar pago
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
+                  <div
+                    className={`list-card-row ${canPay ? "tappable" : ""}`}
+                    key={p.id}
+                    onClick={canPay ? () => { setPayTarget(p); setPayForm({ amount: "", paymentMethod: "CASH" }); } : undefined}
+                  >
+                    <div className="list-card-main">
+                      <div className="list-card-title">{payeeLabel(p)}</div>
+                      <div className="list-card-meta">{p.source === "PURCHASE" ? "Compra" : "Gasto"} · Vence: {formatDate(p.dueDate)}</div>
+                    </div>
+                    <div className="list-card-side">
+                      <span className="list-card-value">{formatMoney(pending, activeBusiness?.currency)}</span>
+                      <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </Card>
 

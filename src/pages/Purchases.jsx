@@ -177,21 +177,38 @@ export default function Purchases() {
           ) : !purchases || purchases.length === 0 ? (
             <EmptyState title="Sin compras registradas" description="Registra tu primera compra a un proveedor." />
           ) : (
-            <table className="table">
-              <thead><tr><th>Fecha</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Estado</th><th></th></tr></thead>
-              <tbody>
+            <>
+              <table className="table data-table">
+                <thead><tr><th>Fecha</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                  {purchases.map((p) => (
+                    <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openDetail(p.id)}>
+                      <td>{formatDateTime(p.createdAt)}</td>
+                      <td>{providerName(p.providerId)}</td>
+                      <td>{formatMoney(p.total, currency)}</td>
+                      <td>{formatMoney(effectivePaidAmount(p), currency)}</td>
+                      <td><Badge tone={STATUS_TONE[effectiveStatus(p)]}>{STATUS_LABEL[effectiveStatus(p)]}</Badge></td>
+                      <td style={{ color: "var(--color-secondary)", fontWeight: 600, fontSize: 12.5 }}>Ver</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="list-cards">
                 {purchases.map((p) => (
-                  <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openDetail(p.id)}>
-                    <td>{formatDateTime(p.createdAt)}</td>
-                    <td>{providerName(p.providerId)}</td>
-                    <td>{formatMoney(p.total, currency)}</td>
-                    <td>{formatMoney(effectivePaidAmount(p), currency)}</td>
-                    <td><Badge tone={STATUS_TONE[effectiveStatus(p)]}>{STATUS_LABEL[effectiveStatus(p)]}</Badge></td>
-                    <td style={{ color: "var(--color-secondary)", fontWeight: 600, fontSize: 12.5 }}>Ver</td>
-                  </tr>
+                  <div className="list-card-row tappable" key={p.id} onClick={() => openDetail(p.id)}>
+                    <div className="list-card-main">
+                      <div className="list-card-title">{providerName(p.providerId)}</div>
+                      <div className="list-card-meta">{formatDateTime(p.createdAt)}</div>
+                    </div>
+                    <div className="list-card-side">
+                      <span className="list-card-value">{formatMoney(p.total, currency)}</span>
+                      <Badge tone={STATUS_TONE[effectiveStatus(p)]}>{STATUS_LABEL[effectiveStatus(p)]}</Badge>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </Card>
       </div>

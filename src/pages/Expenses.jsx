@@ -87,20 +87,37 @@ export default function Expenses() {
           ) : !data || data.length === 0 ? (
             <EmptyState title="Sin gastos registrados" />
           ) : (
-            <table className="table">
-              <thead><tr><th>Descripción</th><th>Categoría</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
-              <tbody>
+            <>
+              <table className="table data-table">
+                <thead><tr><th>Descripción</th><th>Categoría</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
+                <tbody>
+                  {data.map((e) => (
+                    <tr key={e.id}>
+                      <td style={{ fontWeight: 600 }}>{e.description}</td>
+                      <td>{e.category || "—"}</td>
+                      <td>{formatMoney(e.amount, activeBusiness?.currency)}</td>
+                      <td>{e.paid === false ? <Badge tone="warning">A crédito</Badge> : <Badge tone="success">Pagado</Badge>}</td>
+                      <td>{formatDateTime(e.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="list-cards">
                 {data.map((e) => (
-                  <tr key={e.id}>
-                    <td style={{ fontWeight: 600 }}>{e.description}</td>
-                    <td>{e.category || "—"}</td>
-                    <td>{formatMoney(e.amount, activeBusiness?.currency)}</td>
-                    <td>{e.paid === false ? <Badge tone="warning">A crédito</Badge> : <Badge tone="success">Pagado</Badge>}</td>
-                    <td>{formatDateTime(e.createdAt)}</td>
-                  </tr>
+                  <div className="list-card-row" key={e.id}>
+                    <div className="list-card-main">
+                      <div className="list-card-title">{e.description}</div>
+                      <div className="list-card-meta">{e.category || "Sin categoría"} · {formatDateTime(e.createdAt)}</div>
+                    </div>
+                    <div className="list-card-side">
+                      <span className="list-card-value">{formatMoney(e.amount, activeBusiness?.currency)}</span>
+                      {e.paid === false ? <Badge tone="warning">A crédito</Badge> : <Badge tone="success">Pagado</Badge>}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </Card>
       </div>

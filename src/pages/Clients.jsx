@@ -3,7 +3,7 @@ import PageHeader from "../components/PageHeader";
 import { clientsApi } from "../api/crm";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
-import { Button, Card, EmptyState, Field, Input, Modal, PageLoading, PlusIcon } from "../components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, PageLoading, PlusIcon, ChevronRightIcon } from "../components/ui";
 import { errorMessage } from "../utils/format";
 
 const empty = { name: "", phone: "", email: "", address: "" };
@@ -14,6 +14,7 @@ export default function Clients() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [viewTarget, setViewTarget] = useState(null);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -53,21 +54,35 @@ export default function Clients() {
           ) : !data || data.length === 0 ? (
             <EmptyState title="Sin clientes" description="Registra tu primer cliente para poder venderle a crédito." />
           ) : (
-            <table className="table">
-              <thead>
-                <tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Dirección</th></tr>
-              </thead>
-              <tbody>
+            <>
+              <table className="table data-table">
+                <thead>
+                  <tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Dirección</th></tr>
+                </thead>
+                <tbody>
+                  {data.map((c) => (
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 600 }}>{c.name}</td>
+                      <td>{c.phone || "—"}</td>
+                      <td>{c.email || "—"}</td>
+                      <td>{c.address || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="list-cards">
                 {data.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ fontWeight: 600 }}>{c.name}</td>
-                    <td>{c.phone || "—"}</td>
-                    <td>{c.email || "—"}</td>
-                    <td>{c.address || "—"}</td>
-                  </tr>
+                  <div className="list-card-row tappable" key={c.id} onClick={() => setViewTarget(c)}>
+                    <div className="list-card-main">
+                      <div className="list-card-title">{c.name}</div>
+                      <div className="list-card-meta">{c.phone || "Sin teléfono"}</div>
+                    </div>
+                    <ChevronRightIcon width={18} height={18} className="list-card-chevron" />
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </Card>
       </div>
@@ -97,6 +112,16 @@ export default function Clients() {
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </Field>
           </form>
+        </Modal>
+      )}
+
+      {viewTarget && (
+        <Modal title={viewTarget.name} onClose={() => setViewTarget(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13.5 }}>
+            <div><strong>Teléfono:</strong> {viewTarget.phone || "—"}</div>
+            <div><strong>Correo:</strong> {viewTarget.email || "—"}</div>
+            <div><strong>Dirección:</strong> {viewTarget.address || "—"}</div>
+          </div>
         </Modal>
       )}
     </>
