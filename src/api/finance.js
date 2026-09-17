@@ -8,6 +8,8 @@ export const financeApi = {
 
   listDebts: (businessId, { status, clientId } = {}) =>
     api.get(`/businesses/${businessId}/debts`, { status, clientId }),
+  registerLoan: (businessId, payload) =>
+    api.post(`/businesses/${businessId}/debts`, payload),
   payDebt: (businessId, debtId, { amount, paymentMethod }) =>
     api.post(`/businesses/${businessId}/debts/${debtId}/payments`, {
       amount,

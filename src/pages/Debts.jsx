@@ -5,7 +5,7 @@ import { clientsApi, providersApi } from "../api/crm";
 import { useBusiness } from "../context/BusinessContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
-import { Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge } from "../components/ui";
+import { Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, PlusIcon } from "../components/ui";
 import { formatMoney, formatDate, errorMessage } from "../utils/format";
 
 const STATUS_TONE = { PENDING: "warning", PARTIAL: "info", PAID: "success", CANCELLED: "danger" };
@@ -25,8 +25,15 @@ function Receivables() {
   const [payForm, setPayForm] = useState({ amount: "", paymentMethod: "CASH" });
   const [paying, setPaying] = useState(false);
 
+  const [loanOpen, setLoanOpen] = useState(false);
+  const [loanForm, setLoanForm] = useState({ amount: "", clientId: "", debtorName: "", dueDate: "" });
+  const [savingLoan, setSavingLoan] = useState(false);
+
   function clientName(id) {
     return clients?.find((c) => c.id === id)?.name || `#${id}`;
+  }
+  function debtorLabel(d) {
+    return d.clientId ? clientName(d.clientId) : d.debtorName || "—";
   }
 
   const totalPending = (debts || [])
@@ -51,6 +58,31 @@ function Receivables() {
     }
   }
 
+  async function handleRegisterLoan(e) {
+    e.preventDefault();
+    if (!loanForm.clientId && !loanForm.debtorName.trim()) {
+      notify.error("Selecciona un cliente o escribe el nombre de la persona.");
+      return;
+    }
+    setSavingLoan(true);
+    try {
+      await financeApi.registerLoan(businessId, {
+        amount: Number(loanForm.amount),
+        clientId: loanForm.clientId ? Number(loanForm.clientId) : undefined,
+        debtorName: loanForm.clientId ? undefined : loanForm.debtorName,
+        dueDate: loanForm.dueDate || undefined,
+      });
+      notify.success("Préstamo registrado.");
+      setLoanOpen(false);
+      setLoanForm({ amount: "", clientId: "", debtorName: "", dueDate: "" });
+      reload();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSavingLoan(false);
+    }
+  }
+
   return (
     <>
       <div className="stat-grid" style={{ marginBottom: 18 }}>
@@ -60,7 +92,8 @@ function Receivables() {
         </div>
       </div>
 
-      <div className="filters-row">
+      <div className="filters-row" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8 }}>
         <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
           <option value="">Todos los estados</option>
           <option value="PENDING">Pendiente</option>
@@ -72,6 +105,10 @@ function Receivables() {
           <option value="">Todos los clientes</option>
           {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
+        </div>
+        <Button variant="primary" onClick={() => setLoanOpen(true)}>
+          <PlusIcon width={15} height={15} /> Registrar préstamo
+        </Button>
       </div>
 
       <Card>
@@ -89,7 +126,7 @@ function Receivables() {
                   const canPay = d.status === "PENDING" || d.status === "PARTIAL";
                   return (
                     <tr key={d.id}>
-                      <td style={{ fontWeight: 600 }}>{clientName(d.clientId)}</td>
+                      <td style={{ fontWeight: 600 }}>{debtorLabel(d)}</td>
                       <td>{formatMoney(d.totalAmount, activeBusiness?.currency)}</td>
                       <td>{formatMoney(d.paidAmount, activeBusiness?.currency)}</td>
                       <td>{formatMoney(pending, activeBusiness?.currency)}</td>
@@ -119,7 +156,7 @@ function Receivables() {
                     onClick={canPay ? () => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); } : undefined}
                   >
                     <div className="list-card-main">
-                      <div className="list-card-title">{clientName(d.clientId)}</div>
+                      <div className="list-card-title">{debtorLabel(d)}</div>
                       <div className="list-card-meta">Vence: {formatDate(d.dueDate)} · Abonado {formatMoney(d.paidAmount, activeBusiness?.currency)}</div>
                     </div>
                     <div className="list-card-side">
@@ -136,7 +173,7 @@ function Receivables() {
 
       {payTarget && (
         <Modal
-          title={`Abono de ${clientName(payTarget.clientId)}`}
+          title={`Abono de ${debtorLabel(payTarget)}`}
           onClose={() => setPayTarget(null)}
           footer={
             <>
@@ -158,6 +195,42 @@ function Receivables() {
                 <option value="TRANSFER">Transferencia</option>
                 <option value="CARD">Tarjeta</option>
               </Select>
+            </Field>
+          </form>
+        </Modal>
+      )}
+
+      {loanOpen && (
+        <Modal
+          title="Registrar préstamo"
+          onClose={() => setLoanOpen(false)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setLoanOpen(false)}>Cancelar</Button>
+              <Button variant="primary" loading={savingLoan} onClick={handleRegisterLoan}>Registrar</Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginTop: 0 }}>
+            Registra dinero que le prestas a un cliente o a cualquier persona; te quedará reflejado en "Me deben".
+          </p>
+          <form onSubmit={handleRegisterLoan}>
+            <Field label="Monto prestado">
+              <Input type="number" min="0.01" step="0.01" required value={loanForm.amount} onChange={(e) => setLoanForm({ ...loanForm, amount: e.target.value })} />
+            </Field>
+            <Field label="Cliente (opcional)">
+              <Select value={loanForm.clientId} onChange={(e) => setLoanForm({ ...loanForm, clientId: e.target.value, debtorName: "" })}>
+                <option value="">Persona sin registrar</option>
+                {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </Field>
+            {!loanForm.clientId && (
+              <Field label="Nombre de la persona">
+                <Input value={loanForm.debtorName} onChange={(e) => setLoanForm({ ...loanForm, debtorName: e.target.value })} placeholder="Ej: Juan (amigo)" />
+              </Field>
+            )}
+            <Field label="Fecha de vencimiento (opcional)" hint="Si no indicas nada, se usan 30 días">
+              <Input type="date" value={loanForm.dueDate} onChange={(e) => setLoanForm({ ...loanForm, dueDate: e.target.value })} />
             </Field>
           </form>
         </Modal>

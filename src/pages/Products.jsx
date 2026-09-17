@@ -49,7 +49,7 @@ export default function Products() {
   const [adjusting, setAdjusting] = useState(false);
 
   const [infoTarget, setInfoTarget] = useState(null);
-  const [infoForm, setInfoForm] = useState({ name: "", salePrice: "" });
+  const [infoForm, setInfoForm] = useState({ name: "", salePrice: "", categoryId: "" });
   const [savingInfo, setSavingInfo] = useState(false);
 
   const [imageTarget, setImageTarget] = useState(null);
@@ -92,7 +92,7 @@ export default function Products() {
     try {
       await catalogApi.adjustStock(businessId, stockTarget.id, {
         quantity: Number(stockForm.quantity),
-        reason: stockForm.reason,
+        reason: stockForm.reason || undefined,
       });
       notify.success("Stock actualizado.");
       setStockTarget(null);
@@ -107,7 +107,7 @@ export default function Products() {
 
   function openInfoModal(product) {
     setInfoTarget(product);
-    setInfoForm({ name: product.name, salePrice: String(product.salePrice) });
+    setInfoForm({ name: product.name, salePrice: String(product.salePrice), categoryId: product.categoryId ? String(product.categoryId) : "" });
   }
 
   async function handleUpdateInfo(e) {
@@ -117,6 +117,7 @@ export default function Products() {
       await catalogApi.updateProduct(businessId, infoTarget.id, {
         name: infoForm.name,
         salePrice: Number(infoForm.salePrice),
+        categoryId: infoForm.categoryId ? Number(infoForm.categoryId) : undefined,
       });
       notify.success("Producto actualizado.");
       setInfoTarget(null);
@@ -372,9 +373,8 @@ export default function Products() {
                 placeholder="Ej: 10 o -3"
               />
             </Field>
-            <Field label="Motivo">
+            <Field label="Motivo (opcional)">
               <Input
-                required
                 maxLength={200}
                 value={stockForm.reason}
                 onChange={(e) => setStockForm({ ...stockForm, reason: e.target.value })}
@@ -402,6 +402,14 @@ export default function Products() {
             </Field>
             <Field label="Precio de venta">
               <Input type="number" min="1" step="0.01" required value={infoForm.salePrice} onChange={(e) => setInfoForm({ ...infoForm, salePrice: e.target.value })} />
+            </Field>
+            <Field label="Categoría">
+              <Select value={infoForm.categoryId} onChange={(e) => setInfoForm({ ...infoForm, categoryId: e.target.value })}>
+                <option value="">Sin categoría</option>
+                {categories?.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
             </Field>
           </form>
         </Modal>
