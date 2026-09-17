@@ -6,7 +6,7 @@ import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
   Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, IconButton,
-  PlusIcon, EditIcon, ImageIcon, UploadIcon,
+  PlusIcon, EditIcon, BoxIcon, ImageIcon, UploadIcon,
 } from "../components/ui";
 import { errorMessage, formatMoney, resolveImageUrl } from "../utils/format";
 
@@ -47,6 +47,10 @@ export default function Products() {
   const [stockTarget, setStockTarget] = useState(null);
   const [stockForm, setStockForm] = useState({ quantity: "", reason: "" });
   const [adjusting, setAdjusting] = useState(false);
+
+  const [infoTarget, setInfoTarget] = useState(null);
+  const [infoForm, setInfoForm] = useState({ name: "", salePrice: "" });
+  const [savingInfo, setSavingInfo] = useState(false);
 
   const [imageTarget, setImageTarget] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -98,6 +102,29 @@ export default function Products() {
       notify.error(errorMessage(err));
     } finally {
       setAdjusting(false);
+    }
+  }
+
+  function openInfoModal(product) {
+    setInfoTarget(product);
+    setInfoForm({ name: product.name, salePrice: String(product.salePrice) });
+  }
+
+  async function handleUpdateInfo(e) {
+    e.preventDefault();
+    setSavingInfo(true);
+    try {
+      await catalogApi.updateProduct(businessId, infoTarget.id, {
+        name: infoForm.name,
+        salePrice: Number(infoForm.salePrice),
+      });
+      notify.success("Producto actualizado.");
+      setInfoTarget(null);
+      reload();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSavingInfo(false);
     }
   }
 
@@ -208,9 +235,14 @@ export default function Products() {
                           {p.stock} {low && <Badge tone="warning">Stock bajo</Badge>}
                         </td>
                         <td>
-                          <IconButton onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }} title="Ajustar stock">
-                            <EditIcon width={15} height={15} />
-                          </IconButton>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <IconButton onClick={() => openInfoModal(p)} title="Editar producto">
+                              <EditIcon width={15} height={15} />
+                            </IconButton>
+                            <IconButton onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }} title="Ajustar stock">
+                              <BoxIcon width={15} height={15} />
+                            </IconButton>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -233,12 +265,17 @@ export default function Products() {
                       <div className="product-card-info">
                         <div className="product-card-top">
                           <span className="name">{p.name}</span>
-                          <IconButton
-                            onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }}
-                            title="Ajustar stock"
-                          >
-                            <EditIcon width={14} height={14} />
-                          </IconButton>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <IconButton onClick={() => openInfoModal(p)} title="Editar producto">
+                              <EditIcon width={14} height={14} />
+                            </IconButton>
+                            <IconButton
+                              onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }}
+                              title="Ajustar stock"
+                            >
+                              <BoxIcon width={14} height={14} />
+                            </IconButton>
+                          </div>
                         </div>
                         <div className="meta">
                           {p.sku ? `SKU: ${p.sku} · ` : ""}{categoryName(p.categoryId)}
@@ -343,6 +380,28 @@ export default function Products() {
                 onChange={(e) => setStockForm({ ...stockForm, reason: e.target.value })}
                 placeholder="Ej: llegada de pedido, merma, conteo físico"
               />
+            </Field>
+          </form>
+        </Modal>
+      )}
+
+      {infoTarget && (
+        <Modal
+          title={`Editar producto`}
+          onClose={() => setInfoTarget(null)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setInfoTarget(null)}>Cancelar</Button>
+              <Button variant="primary" loading={savingInfo} onClick={handleUpdateInfo}>Guardar cambios</Button>
+            </>
+          }
+        >
+          <form onSubmit={handleUpdateInfo}>
+            <Field label="Nombre">
+              <Input required value={infoForm.name} onChange={(e) => setInfoForm({ ...infoForm, name: e.target.value })} autoFocus />
+            </Field>
+            <Field label="Precio de venta">
+              <Input type="number" min="1" step="0.01" required value={infoForm.salePrice} onChange={(e) => setInfoForm({ ...infoForm, salePrice: e.target.value })} />
             </Field>
           </form>
         </Modal>

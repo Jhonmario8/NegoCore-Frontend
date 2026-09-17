@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { toPng } from "html-to-image";
 import PageHeader from "../components/PageHeader";
 import { catalogApi } from "../api/catalog";
 import { clientsApi } from "../api/crm";
 import { salesApi } from "../api/sales";
 import { financeApi } from "../api/finance";
 import { useBusiness } from "../context/BusinessContext";
+import { useAuth } from "../context/AuthContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
@@ -210,8 +212,9 @@ function Pos({ currency, businessId, onSold }) {
   );
 }
 
-function SalesHistory({ businessId, currency, refreshKey }) {
+function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
   const notify = useToast();
+  const { user } = useAuth();
   const [filters, setFilters] = useState({ status: "", clientId: "", from: "", to: "" });
   const { data: sales, loading, reload } = useBusinessData(
     (id) => salesApi.list(id, {
@@ -223,6 +226,18 @@ function SalesHistory({ businessId, currency, refreshKey }) {
     [filters.status, filters.clientId, filters.from, filters.to, refreshKey]
   );
   const { data: debts, reload: reloadDebts } = useBusinessData((id) => financeApi.listDebts(id), [refreshKey]);
+  const { data: products } = useBusinessData((id) => catalogApi.listProducts(id));
+  const { data: clients } = useBusinessData((id) => clientsApi.list(id));
+  const productsById = useMemo(() => {
+    const map = new Map();
+    (products || []).forEach((p) => map.set(p.id, p));
+    return map;
+  }, [products]);
+  const clientsById = useMemo(() => {
+    const map = new Map();
+    (clients || []).forEach((c) => map.set(c.id, c));
+    return map;
+  }, [clients]);
   const debtsBySaleId = useMemo(() => {
     const map = new Map();
     (debts || []).forEach((d) => {
@@ -244,6 +259,8 @@ function SalesHistory({ businessId, currency, refreshKey }) {
   const [cancelling, setCancelling] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const receiptRef = useRef(null);
 
   async function openDetail(saleId) {
     try {
@@ -282,6 +299,22 @@ function SalesHistory({ businessId, currency, refreshKey }) {
       notify.error(errorMessage(err));
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleDownloadReceipt() {
+    if (!receiptRef.current) return;
+    setExporting(true);
+    try {
+      const dataUrl = await toPng(receiptRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
+      const link = document.createElement("a");
+      link.download = `recibo-venta-${detail.sale.id}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      notify.error("No se pudo generar el recibo.");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -334,16 +367,21 @@ function SalesHistory({ businessId, currency, refreshKey }) {
             title={`Venta #${detail.sale.id}`}
             onClose={() => setDetail(null)}
             footer={
-              detail.sale.status !== "CANCELLED" && (
-                <>
-                  {canPay && (
-                    <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
-                  )}
-                  <Button variant="danger" loading={cancelling} onClick={handleCancel}>
-                    Cancelar venta
-                  </Button>
-                </>
-              )
+              <>
+                <Button variant="outlined" loading={exporting} onClick={handleDownloadReceipt}>
+                  Descargar recibo
+                </Button>
+                {detail.sale.status !== "CANCELLED" && (
+                  <>
+                    {canPay && (
+                      <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
+                    )}
+                    <Button variant="danger" loading={cancelling} onClick={handleCancel}>
+                      Cancelar venta
+                    </Button>
+                  </>
+                )}
+              </>
             }
           >
             <div style={{ marginBottom: 10 }}>
@@ -354,7 +392,7 @@ function SalesHistory({ businessId, currency, refreshKey }) {
               <tbody>
                 {detail.items.map((i) => (
                   <tr key={i.id}>
-                    <td>#{i.productId}</td>
+                    <td>{productsById.get(i.productId)?.name || `#${i.productId}`}</td>
                     <td>{i.quantity}</td>
                     <td>{formatMoney(i.unitPrice, currency)}</td>
                     <td>{formatMoney(i.subtotal, currency)}</td>
@@ -373,6 +411,80 @@ function SalesHistory({ businessId, currency, refreshKey }) {
           </Modal>
         );
       })()}
+
+      {detail && (
+        <div style={{ position: "fixed", top: -99999, left: -99999 }} aria-hidden="true">
+          <div
+            ref={receiptRef}
+            style={{
+              width: 420,
+              background: "#ffffff",
+              color: "#1a1a1a",
+              padding: "28px 30px",
+              fontFamily: "Arial, sans-serif",
+            }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <h1 style={{ fontSize: 19, margin: "0 0 6px", color: "#111" }}>{activeBusiness?.name}</h1>
+              <div style={{ fontSize: 11.5, color: "#555", lineHeight: 1.5 }}>
+                {activeBusiness?.address && <div>{activeBusiness.address}</div>}
+                {activeBusiness?.phone && <div>Tel: {activeBusiness.phone}</div>}
+              </div>
+            </div>
+
+            <div style={{ borderTop: "1px dashed #ccc", borderBottom: "1px dashed #ccc", padding: "10px 0", fontSize: 12, color: "#333" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Recibo de venta</span>
+                <span>#{detail.sale.id}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Fecha</span>
+                <span>{formatDateTime(detail.sale.createdAt)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Cliente</span>
+                <span>{clientsById.get(detail.sale.clientId)?.name || "Consumidor final"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Atendido por</span>
+                <span>{user?.name || "—"}</span>
+              </div>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14, fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #ddd", textAlign: "left", color: "#555" }}>
+                  <th style={{ padding: "0 0 6px" }}>Producto</th>
+                  <th style={{ padding: "0 0 6px", textAlign: "center" }}>Cant.</th>
+                  <th style={{ padding: "0 0 6px", textAlign: "right" }}>Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.items.map((i) => (
+                  <tr key={i.id} style={{ borderBottom: "1px solid #f2f2f2" }}>
+                    <td style={{ padding: "6px 0" }}>{productsById.get(i.productId)?.name || `#${i.productId}`}</td>
+                    <td style={{ padding: "6px 0", textAlign: "center" }}>{i.quantity}</td>
+                    <td style={{ padding: "6px 0", textAlign: "right" }}>{formatMoney(i.subtotal, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700, marginTop: 14, paddingTop: 10, borderTop: "1px dashed #ccc" }}>
+              <span>Total</span>
+              <span>{formatMoney(detail.sale.total, currency)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#666", marginTop: 4 }}>
+              <span>Pagado</span>
+              <span>{formatMoney(effectivePaidAmount(detail.sale), currency)}</span>
+            </div>
+
+            <p style={{ textAlign: "center", fontSize: 10.5, color: "#888", marginTop: 20 }}>
+              ¡Gracias por tu compra!
+            </p>
+          </div>
+        </div>
+      )}
 
       {showPay && detail && (
         <PaymentModal
@@ -408,7 +520,7 @@ export default function Sales() {
             onSold={() => setRefreshKey((k) => k + 1)}
           />
         ) : (
-          <SalesHistory businessId={activeBusinessId} currency={activeBusiness?.currency} refreshKey={refreshKey} />
+          <SalesHistory businessId={activeBusinessId} currency={activeBusiness?.currency} activeBusiness={activeBusiness} refreshKey={refreshKey} />
         )}
       </div>
     </>

@@ -15,6 +15,8 @@ export default function Providers() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [viewTarget, setViewTarget] = useState(null);
+  const [editForm, setEditForm] = useState(empty);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -33,6 +35,36 @@ export default function Providers() {
       notify.error(errorMessage(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openView(provider) {
+    setViewTarget(provider);
+    setEditForm({
+      name: provider.name,
+      phone: provider.phone || "",
+      email: provider.email || "",
+      address: provider.address || "",
+    });
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault();
+    setSavingEdit(true);
+    try {
+      await providersApi.update(businessId, viewTarget.id, {
+        name: editForm.name,
+        phone: editForm.phone || undefined,
+        email: editForm.email || undefined,
+        address: editForm.address || undefined,
+      });
+      notify.success("Proveedor actualizado.");
+      setViewTarget(null);
+      reload();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -61,7 +93,7 @@ export default function Providers() {
                 </thead>
                 <tbody>
                   {data.map((p) => (
-                    <tr key={p.id}>
+                    <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openView(p)}>
                       <td style={{ fontWeight: 600 }}>{p.name}</td>
                       <td>{p.phone || "—"}</td>
                       <td>{p.email || "—"}</td>
@@ -73,7 +105,7 @@ export default function Providers() {
 
               <div className="list-cards">
                 {data.map((p) => (
-                  <div className="list-card-row tappable" key={p.id} onClick={() => setViewTarget(p)}>
+                  <div className="list-card-row tappable" key={p.id} onClick={() => openView(p)}>
                     <div className="list-card-main">
                       <div className="list-card-title">{p.name}</div>
                       <div className="list-card-meta">{p.phone || "Sin teléfono"}</div>
@@ -116,12 +148,30 @@ export default function Providers() {
       )}
 
       {viewTarget && (
-        <Modal title={viewTarget.name} onClose={() => setViewTarget(null)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13.5 }}>
-            <div><strong>Teléfono:</strong> {viewTarget.phone || "—"}</div>
-            <div><strong>Correo:</strong> {viewTarget.email || "—"}</div>
-            <div><strong>Dirección:</strong> {viewTarget.address || "—"}</div>
-          </div>
+        <Modal
+          title={`Editar proveedor`}
+          onClose={() => setViewTarget(null)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setViewTarget(null)}>Cancelar</Button>
+              <Button variant="primary" loading={savingEdit} onClick={handleUpdate}>Guardar cambios</Button>
+            </>
+          }
+        >
+          <form onSubmit={handleUpdate}>
+            <Field label="Nombre">
+              <Input required minLength={2} maxLength={100} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} autoFocus />
+            </Field>
+            <Field label="Teléfono (opcional)">
+              <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+            </Field>
+            <Field label="Correo (opcional)">
+              <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+            </Field>
+            <Field label="Dirección (opcional)">
+              <Input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
+            </Field>
+          </form>
         </Modal>
       )}
     </>

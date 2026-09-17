@@ -18,6 +18,8 @@ export const catalogApi = {
       quantity,
       reason,
     }),
+  updateProduct: (businessId, productId, payload) =>
+    api.patch(`/businesses/${businessId}/products/${productId}`, payload),
 
   uploadImage: async (businessId, productId, file) => {
     const formData = new FormData();
