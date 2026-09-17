@@ -25,16 +25,3 @@ export const financeApi = {
   balanceReport: (businessId, { from, to } = {}) =>
     api.get(`/businesses/${businessId}/reports/balance`, { from, to }),
 };
-
-export const auditApi = {
-  list: (businessId, { from, to, action, entity, entityId, page, size } = {}) =>
-    api.get(`/businesses/${businessId}/audit-logs`, {
-      from,
-      to,
-      action,
-      entity,
-      entityId,
-      page,
-      size,
-    }),
-};

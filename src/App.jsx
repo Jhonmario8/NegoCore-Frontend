@@ -18,7 +18,6 @@ import Purchases from "./pages/Purchases";
 import Cotizaciones from "./pages/Cotizaciones";
 import Expenses from "./pages/Expenses";
 import Debts from "./pages/Debts";
-import AuditLogs from "./pages/AuditLogs";
 
 export default function App() {
   return (
@@ -57,7 +56,6 @@ export default function App() {
                 <Route path="cotizaciones" element={<Cotizaciones />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="debts" element={<Debts />} />
-                <Route path="audit-logs" element={<AuditLogs />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/login" replace />} />

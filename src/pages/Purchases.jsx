@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { toPng } from "html-to-image";
 import PageHeader from "../components/PageHeader";
 import { catalogApi } from "../api/catalog";
 import { providersApi } from "../api/crm";
 import { purchasesApi } from "../api/purchases";
 import { financeApi } from "../api/finance";
 import { useBusiness } from "../context/BusinessContext";
+import { useAuth } from "../context/AuthContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
@@ -18,11 +20,17 @@ const STATUS_LABEL = { PAID: "Pagada", PARTIAL: "Parcial", CANCELLED: "Cancelada
 
 export default function Purchases() {
   const { activeBusinessId, activeBusiness } = useBusiness();
+  const { user } = useAuth();
   const notify = useToast();
   const currency = activeBusiness?.currency;
 
   const { data: providers } = useBusinessData((id) => providersApi.list(id));
   const { data: products } = useBusinessData((id) => catalogApi.listProducts(id));
+  const productsById = useMemo(() => {
+    const map = new Map();
+    (products || []).forEach((p) => map.set(p.id, p));
+    return map;
+  }, [products]);
   const [filters, setFilters] = useState({ providerId: "", status: "" });
   const { data: purchases, loading, reload } = useBusinessData(
     (id) => purchasesApi.list(id, { providerId: filters.providerId || undefined, status: filters.status || undefined }),
@@ -56,6 +64,8 @@ export default function Purchases() {
   const [detail, setDetail] = useState(null);
   const [showPay, setShowPay] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const receiptRef = useRef(null);
 
   const itemsTotal = useMemo(
     () => items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitCost) || 0), 0),
@@ -143,6 +153,22 @@ export default function Purchases() {
       notify.error(errorMessage(err));
     } finally {
       setPaying(false);
+    }
+  }
+
+  async function handleDownloadReceipt() {
+    if (!receiptRef.current) return;
+    setExporting(true);
+    try {
+      const dataUrl = await toPng(receiptRef.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
+      const link = document.createElement("a");
+      link.download = `recibo-compra-${detail.purchase.id}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      notify.error("No se pudo generar el recibo.");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -282,9 +308,14 @@ export default function Purchases() {
             title={`Compra #${detail.purchase.id}`}
             onClose={() => setDetail(null)}
             footer={
-              canPay && (
-                <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
-              )
+              <>
+                <Button variant="outlined" loading={exporting} onClick={handleDownloadReceipt}>
+                  Descargar recibo
+                </Button>
+                {canPay && (
+                  <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
+                )}
+              </>
             }
           >
             <div style={{ marginBottom: 10 }}>
@@ -295,7 +326,7 @@ export default function Purchases() {
               <tbody>
                 {detail.items.map((i) => (
                   <tr key={i.id}>
-                    <td>#{i.productId}</td>
+                    <td>{productsById.get(i.productId)?.name || `#${i.productId}`}</td>
                     <td>{i.quantity}</td>
                     <td>{formatMoney(i.unitCost, currency)}</td>
                     <td>{formatMoney(i.subtotal, currency)}</td>
@@ -320,6 +351,87 @@ export default function Purchases() {
           </Modal>
         );
       })()}
+
+      {detail && (
+        <div style={{ position: "fixed", top: -99999, left: -99999 }} aria-hidden="true">
+          <div
+            ref={receiptRef}
+            style={{
+              width: 420,
+              background: "#ffffff",
+              color: "#1a1a1a",
+              padding: "28px 30px",
+              fontFamily: "Arial, sans-serif",
+            }}
+          >
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <h1 style={{ fontSize: 19, margin: "0 0 6px", color: "#111" }}>{activeBusiness?.name}</h1>
+              <div style={{ fontSize: 11.5, color: "#555", lineHeight: 1.5 }}>
+                {activeBusiness?.address && <div>{activeBusiness.address}</div>}
+                {activeBusiness?.phone && <div>Tel: {activeBusiness.phone}</div>}
+              </div>
+            </div>
+
+            <div style={{ borderTop: "1px dashed #ccc", borderBottom: "1px dashed #ccc", padding: "10px 0", fontSize: 12, color: "#333" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Recibo de compra</span>
+                <span>#{detail.purchase.id}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Fecha</span>
+                <span>{formatDateTime(detail.purchase.createdAt)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Proveedor</span>
+                <span>{providerName(detail.purchase.providerId)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Registrado por</span>
+                <span>{user?.name || "—"}</span>
+              </div>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14, fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #ddd", textAlign: "left", color: "#555" }}>
+                  <th style={{ padding: "0 0 6px" }}>Producto</th>
+                  <th style={{ padding: "0 0 6px", textAlign: "center" }}>Cant.</th>
+                  <th style={{ padding: "0 0 6px", textAlign: "right" }}>Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.items.map((i) => (
+                  <tr key={i.id} style={{ borderBottom: "1px solid #f2f2f2" }}>
+                    <td style={{ padding: "6px 0" }}>{productsById.get(i.productId)?.name || `#${i.productId}`}</td>
+                    <td style={{ padding: "6px 0", textAlign: "center" }}>{i.quantity}</td>
+                    <td style={{ padding: "6px 0", textAlign: "right" }}>{formatMoney(i.subtotal, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {detail.purchase.shippingCost > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#555", marginTop: 8 }}>
+                <span>Costo de envío</span>
+                <span>{formatMoney(detail.purchase.shippingCost, currency)}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700, marginTop: 14, paddingTop: 10, borderTop: "1px dashed #ccc" }}>
+              <span>Total</span>
+              <span>{formatMoney(detail.purchase.total, currency)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#666", marginTop: 4 }}>
+              <span>Pagado</span>
+              <span>{formatMoney(effectivePaidAmount(detail.purchase), currency)}</span>
+            </div>
+
+            <p style={{ textAlign: "center", fontSize: 10.5, color: "#888", marginTop: 20 }}>
+              Gracias por tu confianza.
+            </p>
+          </div>
+        </div>
+      )}
 
       {showPay && detail && (
         <PaymentModal

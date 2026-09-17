@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useBusiness } from "../context/BusinessContext";
 import {
   HomeIcon, BoxIcon, TagIcon, UsersIcon, TruckIcon, CartIcon,
-  ReceiptIcon, AlertIcon, HistoryIcon, LogoutIcon, WalletIcon, IconButton,
+  ReceiptIcon, AlertIcon, LogoutIcon, WalletIcon, IconButton,
 } from "./ui";
 
 const NAV = [
@@ -17,7 +17,6 @@ const NAV = [
   { to: "/app/cotizaciones", label: "Cotizaciones", icon: ReceiptIcon },
   { to: "/app/expenses", label: "Gastos", icon: ReceiptIcon },
   { to: "/app/debts", label: "Cuentas", icon: AlertIcon },
-  { to: "/app/audit-logs", label: "Auditoría", icon: HistoryIcon },
 ];
 
 function initials(name) {
