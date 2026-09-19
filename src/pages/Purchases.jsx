@@ -56,7 +56,7 @@ export default function Purchases() {
 
   const [open, setOpen] = useState(false);
   const [providerId, setProviderId] = useState("");
-  const [items, setItems] = useState([{ productId: "", quantity: "1", unitCost: "" }]);
+  const [items, setItems] = useState([{ productId: "", productName: "", quantity: "1", unitCost: "" }]);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paidAmount, setPaidAmount] = useState("");
   const [shippingCost, setShippingCost] = useState("");
@@ -76,15 +76,25 @@ export default function Purchases() {
   function updateItem(idx, field, value) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   }
+  function selectProductByName(idx, name) {
+    const match = products?.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      if (match) {
+        return { ...it, productId: String(match.id), productName: match.name, unitCost: String(match.costPrice) };
+      }
+      return { ...it, productId: "", productName: name };
+    }));
+  }
   function addItem() {
-    setItems((prev) => [...prev, { productId: "", quantity: "1", unitCost: "" }]);
+    setItems((prev) => [...prev, { productId: "", productName: "", quantity: "1", unitCost: "" }]);
   }
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
   function resetForm() {
     setProviderId("");
-    setItems([{ productId: "", quantity: "1", unitCost: "" }]);
+    setItems([{ productId: "", productName: "", quantity: "1", unitCost: "" }]);
     setPaymentMethod("CASH");
     setPaidAmount("");
     setShippingCost("");
@@ -260,12 +270,17 @@ export default function Purchases() {
             </Field>
 
             <label style={{ fontSize: 12.5, fontWeight: 600 }}>Productos</label>
+            <datalist id="purchase-products-list">
+              {products?.map((p) => <option key={p.id} value={p.name} />)}
+            </datalist>
             {items.map((it, idx) => (
               <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 8, marginTop: 8, alignItems: "center" }}>
-                <Select value={it.productId} onChange={(e) => updateItem(idx, "productId", e.target.value)}>
-                  <option value="">Producto…</option>
-                  {products?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </Select>
+                <Input
+                  list="purchase-products-list"
+                  placeholder="Buscar producto…"
+                  value={it.productName}
+                  onChange={(e) => selectProductByName(idx, e.target.value)}
+                />
                 <Input type="number" min="1" placeholder="Cant." value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} />
                 <Input type="number" min="0" step="0.01" placeholder="Costo unit." value={it.unitCost} onChange={(e) => updateItem(idx, "unitCost", e.target.value)} />
                 <Button type="button" variant="outlined" size="sm" onClick={() => removeItem(idx)} disabled={items.length === 1}>×</Button>
