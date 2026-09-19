@@ -20,6 +20,8 @@ export const catalogApi = {
     }),
   updateProduct: (businessId, productId, payload) =>
     api.patch(`/businesses/${businessId}/products/${productId}`, payload),
+  deleteProduct: (businessId, productId) =>
+    api.del(`/businesses/${businessId}/products/${productId}`),
 
   uploadImage: async (businessId, productId, file) => {
     const formData = new FormData();

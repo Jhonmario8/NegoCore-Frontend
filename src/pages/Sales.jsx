@@ -32,7 +32,7 @@ function Pos({ currency, businessId, onSold }) {
   const [submitting, setSubmitting] = useState(false);
 
   const total = useMemo(
-    () => cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+    () => cart.reduce((sum, i) => sum + (Number(i.unitPrice) || 0) * i.quantity, 0),
     [cart]
   );
 
@@ -76,6 +76,14 @@ function Pos({ currency, businessId, onSold }) {
     );
   }
 
+  function changePrice(productId, value) {
+    setCart((prev) =>
+      prev.map((i) =>
+        i.productId === productId ? { ...i, unitPrice: value === "" ? "" : Number(value) } : i
+      )
+    );
+  }
+
   function resetForm() {
     setCart([]);
     setClientId("");
@@ -89,6 +97,10 @@ function Pos({ currency, businessId, onSold }) {
       notify.error("Agrega al menos un producto.");
       return;
     }
+    if (cart.some((i) => !i.unitPrice || Number(i.unitPrice) <= 0)) {
+      notify.error("El precio de cada producto debe ser mayor a 0.");
+      return;
+    }
     const paid = paidAmount === "" ? total : Number(paidAmount);
     if (paid < total && !clientId) {
       notify.error("Para una venta con saldo pendiente debes seleccionar un cliente.");
@@ -97,7 +109,11 @@ function Pos({ currency, businessId, onSold }) {
     setSubmitting(true);
     try {
       await salesApi.register(businessId, {
-        saleItems: cart.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        saleItems: cart.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+        })),
         paymentMethod,
         paidAmount: paid,
         clientId: clientId ? Number(clientId) : undefined,
@@ -156,8 +172,16 @@ function Pos({ currency, businessId, onSold }) {
               <div key={i.productId} className="cart-row">
                 <div>
                   <div style={{ fontWeight: 600 }}>{i.name}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--color-text-muted)" }}>
-                    {formatMoney(i.unitPrice, currency)} c/u
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={i.unitPrice}
+                      onChange={(e) => changePrice(i.productId, e.target.value)}
+                      style={{ width: 100, height: 28, fontSize: 12.5, padding: "2px 6px" }}
+                    />
+                    <span style={{ fontSize: 11.5, color: "var(--color-text-muted)" }}>c/u</span>
                   </div>
                 </div>
                 <div className="qty-control">

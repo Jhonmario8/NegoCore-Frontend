@@ -6,7 +6,7 @@ import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
   Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, IconButton,
-  PlusIcon, EditIcon, BoxIcon, ImageIcon, UploadIcon,
+  PlusIcon, EditIcon, BoxIcon, ImageIcon, UploadIcon, TrashIcon,
 } from "../components/ui";
 import { errorMessage, formatMoney, resolveImageUrl } from "../utils/format";
 
@@ -57,6 +57,9 @@ export default function Products() {
   const [imageFile, setImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   function categoryName(id) {
     return categories?.find((c) => c.id === id)?.name || "—";
@@ -148,6 +151,20 @@ export default function Products() {
     }
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await catalogApi.deleteProduct(businessId, deleteTarget.id);
+      notify.success("Producto eliminado.");
+      setDeleteTarget(null);
+      reload();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleUploadImage() {
@@ -243,6 +260,9 @@ export default function Products() {
                             <IconButton onClick={() => { setStockTarget(p); setStockForm({ quantity: "", reason: "" }); }} title="Ajustar stock">
                               <BoxIcon width={15} height={15} />
                             </IconButton>
+                            <IconButton danger onClick={() => setDeleteTarget(p)} title="Eliminar producto">
+                              <TrashIcon width={15} height={15} />
+                            </IconButton>
                           </div>
                         </td>
                       </tr>
@@ -275,6 +295,9 @@ export default function Products() {
                               title="Ajustar stock"
                             >
                               <BoxIcon width={14} height={14} />
+                            </IconButton>
+                            <IconButton danger onClick={() => setDeleteTarget(p)} title="Eliminar producto">
+                              <TrashIcon width={14} height={14} />
                             </IconButton>
                           </div>
                         </div>
@@ -452,6 +475,23 @@ export default function Products() {
               </div>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal
+          title="Eliminar producto"
+          onClose={() => setDeleteTarget(null)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+              <Button variant="danger" loading={deleting} onClick={handleDelete}>Eliminar</Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: 13.5 }}>
+            ¿Seguro que quieres eliminar <strong>{deleteTarget.name}</strong>? Ya no aparecerá en el catálogo ni en el punto de venta, pero se conservará en las ventas y compras ya registradas.
+          </p>
         </Modal>
       )}
     </>
