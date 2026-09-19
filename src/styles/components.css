@@ -388,6 +388,7 @@ table.table tr:hover td { background: var(--color-surface-hover); }
 }
 .spinner.dark { color: var(--color-secondary); }
 @keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .7s linear infinite; }
 
 .page-loading { display: flex; align-items: center; justify-content: center; padding: 80px 0; color: var(--color-text-muted); }
 

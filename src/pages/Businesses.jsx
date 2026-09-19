@@ -4,11 +4,11 @@ import { useBusiness } from "../context/BusinessContext";
 import { useAuth } from "../context/AuthContext";
 import { businessApi } from "../api/business";
 import { useToast } from "../context/ToastContext";
-import { Button, Field, Input, Select, Card, EmptyState, PageLoading, Modal, EditIcon, IconButton } from "../components/ui";
+import { Button, Field, Input, Select, Card, EmptyState, PageLoading, Modal, EditIcon, IconButton, RefreshIcon } from "../components/ui";
 import { errorMessage } from "../utils/format";
 
 export default function Businesses() {
-  const { businesses, loading, refresh, setActiveBusinessId } = useBusiness();
+  const { businesses, loading, error, refresh, setActiveBusinessId } = useBusiness();
   const { logout } = useAuth();
   const navigate = useNavigate();
   const notify = useToast();
@@ -18,6 +18,16 @@ export default function Businesses() {
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", currency: "COP", address: "", phone: "", email: "" });
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -77,15 +87,30 @@ export default function Businesses() {
               Elige un negocio para administrar o crea uno nuevo
             </p>
           </div>
-          <Button variant="outlined" onClick={() => { logout(); navigate("/login"); }}>
-            Cerrar sesión
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <IconButton title="Actualizar" onClick={handleRefresh}>
+              <RefreshIcon width={15} height={15} className={refreshing ? "spin" : undefined} />
+            </IconButton>
+            <Button variant="outlined" onClick={() => { logout(); navigate("/login"); }}>
+              Cerrar sesión
+            </Button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18 }}>
           <Card title="Negocios existentes">
             {loading ? (
               <PageLoading />
+            ) : error && businesses.length === 0 ? (
+              <EmptyState
+                title="No se pudieron cargar tus negocios"
+                description={errorMessage(error)}
+                action={
+                  <Button variant="primary" loading={refreshing} onClick={handleRefresh}>
+                    Reintentar
+                  </Button>
+                }
+              />
             ) : businesses.length === 0 ? (
               <EmptyState
                 title="Aún no tienes negocios"

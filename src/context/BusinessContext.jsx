@@ -13,6 +13,7 @@ export function BusinessProvider({ children }) {
     return raw ? Number(raw) : null;
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -24,6 +25,9 @@ export function BusinessProvider({ children }) {
         if (prev && list.some((b) => b.id === prev)) return prev;
         return list && list.length > 0 ? list[0].id : null;
       });
+      setError(null);
+    } catch (err) {
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -51,6 +55,7 @@ export function BusinessProvider({ children }) {
         activeBusiness,
         setActiveBusinessId,
         loading,
+        error,
         refresh,
       }}
     >

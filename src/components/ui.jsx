@@ -127,4 +127,5 @@ export const WalletIcon = (p) => icon(<><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1
 export const CheckIcon = (p) => icon(<path d="M20 6 9 17l-5-5" />, p);
 export const ImageIcon = (p) => icon(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></>, p);
 export const UploadIcon = (p) => icon(<><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></>, p);
+export const RefreshIcon = (p) => icon(<><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 3v6h-6" /></>, p);
 export const ChevronRightIcon = (p) => icon(<path d="m9 6 6 6-6 6" />, p);
