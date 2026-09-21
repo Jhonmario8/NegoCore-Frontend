@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { catalogApi } from "../api/catalog";
 import { useBusiness } from "../context/BusinessContext";
@@ -6,7 +6,7 @@ import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
 import {
   Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, IconButton,
-  PlusIcon, EditIcon, BoxIcon, ImageIcon, UploadIcon, TrashIcon,
+  PlusIcon, EditIcon, BoxIcon, ImageIcon, UploadIcon, TrashIcon, SearchIcon,
 } from "../components/ui";
 import { errorMessage, formatMoney, resolveImageUrl } from "../utils/format";
 
@@ -30,6 +30,7 @@ export default function Products() {
   const { activeBusiness } = useBusiness();
   const notify = useToast();
   const [filters, setFilters] = useState({ categoryId: "", lowStock: false });
+  const [search, setSearch] = useState("");
 
   const { data: categories } = useBusinessData((id) => catalogApi.listCategories(id));
   const { data: products, loading, reload, businessId } = useBusinessData(
@@ -39,6 +40,13 @@ export default function Products() {
     }),
     [filters.categoryId, filters.lowStock]
   );
+
+  const filteredProducts = useMemo(() => {
+    if (!products) return products;
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, search]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyProduct);
@@ -194,6 +202,10 @@ export default function Products() {
         }
       />
       <div className="page-content">
+        <div className="search-input" style={{ marginBottom: 14, maxWidth: 320 }}>
+          <SearchIcon width={16} height={16} />
+          <input placeholder="Buscar producto por nombre…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
         <div className="filters-row">
           <Select value={filters.categoryId} onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}>
             <option value="">Todas las categorías</option>
@@ -216,6 +228,8 @@ export default function Products() {
             <PageLoading />
           ) : !products || products.length === 0 ? (
             <EmptyState title="Sin productos" description="Crea tu primer producto para empezar a vender." />
+          ) : filteredProducts.length === 0 ? (
+            <EmptyState title="Sin resultados" description={`No hay productos que coincidan con "${search}".`} />
           ) : (
             <>
               <table className="table products-table">
@@ -230,7 +244,7 @@ export default function Products() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((p) => {
+                  {filteredProducts.map((p) => {
                     const low = p.stock <= p.minStockAlert;
                     return (
                       <tr key={p.id}>
@@ -272,7 +286,7 @@ export default function Products() {
               </table>
 
               <div className="product-cards">
-                {products.map((p) => {
+                {filteredProducts.map((p) => {
                   const low = p.stock <= p.minStockAlert;
                   return (
                     <div className="product-card-row" key={p.id}>

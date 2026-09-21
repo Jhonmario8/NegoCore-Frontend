@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { clientsApi } from "../api/crm";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
-import { Button, Card, EmptyState, Field, Input, Modal, PageLoading, PlusIcon, ChevronRightIcon } from "../components/ui";
+import { Button, Card, EmptyState, Field, Input, Modal, PageLoading, PlusIcon, ChevronRightIcon, SearchIcon } from "../components/ui";
 import { errorMessage } from "../utils/format";
 
 const empty = { name: "", phone: "", email: "", address: "" };
@@ -11,6 +11,13 @@ const empty = { name: "", phone: "", email: "", address: "" };
 export default function Clients() {
   const { data, loading, reload, businessId } = useBusinessData((id) => clientsApi.list(id));
   const notify = useToast();
+  const [search, setSearch] = useState("");
+  const filteredData = useMemo(() => {
+    if (!data) return data;
+    const q = search.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((c) => c.name.toLowerCase().includes(q));
+  }, [data, search]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -80,11 +87,17 @@ export default function Clients() {
         }
       />
       <div className="page-content">
+        <div className="search-input" style={{ marginBottom: 14, maxWidth: 320 }}>
+          <SearchIcon width={16} height={16} />
+          <input placeholder="Buscar cliente por nombre…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
         <Card>
           {loading ? (
             <PageLoading />
           ) : !data || data.length === 0 ? (
             <EmptyState title="Sin clientes" description="Registra tu primer cliente para poder venderle a crédito." />
+          ) : filteredData.length === 0 ? (
+            <EmptyState title="Sin resultados" description={`No hay clientes que coincidan con "${search}".`} />
           ) : (
             <>
               <table className="table data-table">
@@ -92,7 +105,7 @@ export default function Clients() {
                   <tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Dirección</th></tr>
                 </thead>
                 <tbody>
-                  {data.map((c) => (
+                  {filteredData.map((c) => (
                     <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => openView(c)}>
                       <td style={{ fontWeight: 600 }}>{c.name}</td>
                       <td>{c.phone || "—"}</td>
@@ -104,7 +117,7 @@ export default function Clients() {
               </table>
 
               <div className="list-cards">
-                {data.map((c) => (
+                {filteredData.map((c) => (
                   <div className="list-card-row tappable" key={c.id} onClick={() => openView(c)}>
                     <div className="list-card-main">
                       <div className="list-card-title">{c.name}</div>
