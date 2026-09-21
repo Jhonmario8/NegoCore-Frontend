@@ -51,6 +51,9 @@ export default function Orders() {
   const [convertForm, setConvertForm] = useState({ providerId: "", paymentMethod: "CASH", paidAmount: "", shippingCost: "" });
   const [unitCosts, setUnitCosts] = useState({});
   const [converting, setConverting] = useState(false);
+  const [saleTarget, setSaleTarget] = useState(null);
+  const [saleForm, setSaleForm] = useState({ paymentMethod: "CASH", paidAmount: "" });
+  const [convertingSale, setConvertingSale] = useState(false);
 
   async function handleCreate() {
     setCreating(true);
@@ -208,6 +211,35 @@ export default function Orders() {
     }
   }
 
+  function itemSaleUnitPrice(item) {
+    if (item.salePrice != null) return item.salePrice;
+    return productsById.get(item.productId)?.salePrice ?? 0;
+  }
+
+  function openSaleModal(item) {
+    setSaleTarget(item);
+    setSaleForm({ paymentMethod: "CASH", paidAmount: "" });
+  }
+
+  async function handleConvertItemToSale(e) {
+    e.preventDefault();
+    setConvertingSale(true);
+    try {
+      const total = saleTarget.quantity * itemSaleUnitPrice(saleTarget);
+      const res = await ordersApi.convertItemToSale(activeBusinessId, detail.order.id, saleTarget.id, {
+        paymentMethod: saleForm.paymentMethod,
+        paidAmount: saleForm.paidAmount === "" ? total : Number(saleForm.paidAmount),
+      });
+      notify.success(`Venta #${res.sale.id} registrada.`);
+      setSaleTarget(null);
+      openDetail(detail.order.id);
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setConvertingSale(false);
+    }
+  }
+
   function requesterLabel(item) {
     if (item.clientId) return clientsById.get(item.clientId)?.name || `Cliente #${item.clientId}`;
     if (item.requesterName) return item.requesterName;
@@ -305,10 +337,16 @@ export default function Orders() {
 
           <div style={{ overflowX: "auto" }}>
             <table className="table" style={{ minWidth: 560 }}>
-              <thead><tr><th></th><th>Producto</th><th>Cant.</th><th>Costo</th><th>Venta</th><th>Solicitado por</th>{detail.order.status === "OPEN" && <th></th>}</tr></thead>
+              <thead>
+                <tr>
+                  <th></th><th>Producto</th><th>Cant.</th><th>Costo</th><th>Venta</th><th>Solicitado por</th>
+                  {detail.order.status === "OPEN" && <th></th>}
+                  {detail.order.status === "CONVERTED" && <th></th>}
+                </tr>
+              </thead>
               <tbody>
                 {detail.items.length === 0 ? (
-                  <tr><td colSpan={detail.order.status === "OPEN" ? 7 : 6} style={{ color: "var(--color-text-muted)", textAlign: "center" }}>Sin productos todavía.</td></tr>
+                  <tr><td colSpan={7} style={{ color: "var(--color-text-muted)", textAlign: "center" }}>Sin productos todavía.</td></tr>
                 ) : (
                   detail.items.map((i) => {
                     const product = productsById.get(i.productId);
@@ -334,6 +372,17 @@ export default function Orders() {
                             <Button variant="outlined" size="sm" onClick={() => handleRemoveItem(i.id)}>
                               <TrashIcon width={13} height={13} />
                             </Button>
+                          </td>
+                        )}
+                        {detail.order.status === "CONVERTED" && (
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            {i.convertedSaleId ? (
+                              <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>Venta #{i.convertedSaleId}</span>
+                            ) : i.clientId ? (
+                              <Button variant="secondary" size="sm" onClick={() => openSaleModal(i)}>Convertir a venta</Button>
+                            ) : (
+                              <span style={{ fontSize: 12, color: "var(--color-text-muted)" }}>—</span>
+                            )}
                           </td>
                         )}
                       </tr>
@@ -486,6 +535,46 @@ export default function Orders() {
             </div>
             <p style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
               Si pagas menos del total, se crea automáticamente una cuenta por pagar al proveedor.
+            </p>
+          </form>
+        </Modal>
+      )}
+
+      {saleTarget && (
+        <Modal
+          title={`Convertir a venta · ${productsById.get(saleTarget.productId)?.name || `#${saleTarget.productId}`}`}
+          onClose={() => setSaleTarget(null)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setSaleTarget(null)}>Cancelar</Button>
+              <Button variant="primary" loading={convertingSale} onClick={handleConvertItemToSale}>Registrar venta</Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginTop: 0 }}>
+            Cliente: <strong>{requesterLabel(saleTarget)}</strong> · {saleTarget.quantity} unidad(es) a {formatMoney(itemSaleUnitPrice(saleTarget), currency)} c/u
+          </p>
+          <form onSubmit={handleConvertItemToSale}>
+            <Field label="Método de pago">
+              <Select value={saleForm.paymentMethod} onChange={(e) => setSaleForm({ ...saleForm, paymentMethod: e.target.value })}>
+                <option value="CASH">Efectivo</option>
+                <option value="TRANSFER">Transferencia</option>
+                <option value="CARD">Tarjeta</option>
+                <option value="MIXED">Mixto</option>
+              </Select>
+            </Field>
+            <Field label={`Monto pagado (total: ${formatMoney(saleTarget.quantity * itemSaleUnitPrice(saleTarget), currency)})`}>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder={String(saleTarget.quantity * itemSaleUnitPrice(saleTarget))}
+                value={saleForm.paidAmount}
+                onChange={(e) => setSaleForm({ ...saleForm, paidAmount: e.target.value })}
+              />
+            </Field>
+            <p style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+              Si pagas menos del total, se crea automáticamente una cuenta por cobrar al cliente.
             </p>
           </form>
         </Modal>

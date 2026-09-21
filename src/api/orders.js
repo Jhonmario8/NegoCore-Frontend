@@ -13,4 +13,6 @@ export const ordersApi = {
     api.patch(`/businesses/${businessId}/orders/${orderId}/cancel`, {}),
   convert: (businessId, orderId, payload) =>
     api.post(`/businesses/${businessId}/orders/${orderId}/convert`, payload),
+  convertItemToSale: (businessId, orderId, itemId, payload) =>
+    api.post(`/businesses/${businessId}/orders/${orderId}/items/${itemId}/convert-to-sale`, payload),
 };

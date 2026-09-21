@@ -398,12 +398,13 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Fecha</th><th>Total</th><th>Pagado</th><th>Método</th><th>Estado</th><th></th></tr>
+              <tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Pagado</th><th>Método</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
               {sales.map((s) => (
                 <tr key={s.id} style={{ cursor: "pointer" }} onClick={() => openDetail(s.id)}>
                   <td>{formatDateTime(s.createdAt)}</td>
+                  <td>{s.clientId ? (clientsById.get(s.clientId)?.name || `Cliente #${s.clientId}`) : "Consumidor final"}</td>
                   <td>{formatMoney(s.total, currency)}</td>
                   <td>{formatMoney(effectivePaidAmount(s), currency)}</td>
                   <td>{s.paymentMethod}</td>
@@ -443,8 +444,12 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
               </>
             }
           >
-            <div style={{ marginBottom: 10 }}>
+            <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+              <span style={{ fontSize: 13 }}>
+                <span style={{ color: "var(--color-text-muted)" }}>Cliente: </span>
+                {detail.sale.clientId ? (clientsById.get(detail.sale.clientId)?.name || `Cliente #${detail.sale.clientId}`) : "Consumidor final"}
+              </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 13 }}>
               <span style={{ color: "var(--color-text-muted)" }}>Fecha:</span>
