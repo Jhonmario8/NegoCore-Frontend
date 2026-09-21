@@ -13,7 +13,7 @@ import {
   Button, Card, EmptyState, Field, Input, Select, PageLoading, Badge, Modal, SearchIcon,
 } from "../components/ui";
 import PaymentModal from "../components/PaymentModal";
-import { formatMoney, formatDateTime, errorMessage, resolveImageUrl } from "../utils/format";
+import { formatMoney, formatDateTime, errorMessage, resolveImageUrl, nowDateTimeLocal, toDateTimeLocalValue } from "../utils/format";
 import { ImageIcon } from "../components/ui";
 
 const STATUS_TONE = { PAID: "success", PARTIAL: "warning", CANCELLED: "danger" };
@@ -29,6 +29,7 @@ function Pos({ currency, businessId, onSold }) {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [clientId, setClientId] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
+  const [saleDate, setSaleDate] = useState(nowDateTimeLocal());
   const [submitting, setSubmitting] = useState(false);
 
   const total = useMemo(
@@ -89,6 +90,7 @@ function Pos({ currency, businessId, onSold }) {
     setClientId("");
     setPaidAmount("");
     setPaymentMethod("CASH");
+    setSaleDate(nowDateTimeLocal());
   }
 
   async function handleSubmit(e) {
@@ -117,6 +119,7 @@ function Pos({ currency, businessId, onSold }) {
         paymentMethod,
         paidAmount: paid,
         clientId: clientId ? Number(clientId) : undefined,
+        createdAt: saleDate || undefined,
       });
       notify.success("Venta registrada.");
       resetForm();
@@ -211,6 +214,14 @@ function Pos({ currency, businessId, onSold }) {
               <option value="MIXED">Mixto</option>
             </Select>
           </Field>
+          <Field label="Fecha de la venta">
+            <Input
+              type="datetime-local"
+              value={saleDate}
+              max={nowDateTimeLocal()}
+              onChange={(e) => setSaleDate(e.target.value)}
+            />
+          </Field>
           <Field label={`Monto pagado (total: ${formatMoney(total, currency)})`}>
             <Input
               type="number"
@@ -284,14 +295,38 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
   const [showPay, setShowPay] = useState(false);
   const [paying, setPaying] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [dateForm, setDateForm] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
   const receiptRef = useRef(null);
 
   async function openDetail(saleId) {
     try {
       const res = await salesApi.get(businessId, saleId);
       setDetail(res);
+      setEditingDate(false);
     } catch (err) {
       notify.error(errorMessage(err));
+    }
+  }
+
+  function openEditDate() {
+    setDateForm(toDateTimeLocalValue(new Date(detail.sale.createdAt)));
+    setEditingDate(true);
+  }
+
+  async function handleSaveDate() {
+    setSavingDate(true);
+    try {
+      await salesApi.updateDate(businessId, detail.sale.id, dateForm);
+      notify.success("Fecha actualizada.");
+      setEditingDate(false);
+      reload();
+      openDetail(detail.sale.id);
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSavingDate(false);
     }
   }
 
@@ -389,7 +424,7 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
         return (
           <Modal
             title={`Venta #${detail.sale.id}`}
-            onClose={() => setDetail(null)}
+            onClose={() => { setDetail(null); setEditingDate(false); }}
             footer={
               <>
                 <Button variant="outlined" loading={exporting} onClick={handleDownloadReceipt}>
@@ -410,6 +445,27 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
           >
             <div style={{ marginBottom: 10 }}>
               <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 13 }}>
+              <span style={{ color: "var(--color-text-muted)" }}>Fecha:</span>
+              {editingDate ? (
+                <>
+                  <Input
+                    type="datetime-local"
+                    value={dateForm}
+                    max={nowDateTimeLocal()}
+                    onChange={(e) => setDateForm(e.target.value)}
+                    style={{ width: 210 }}
+                  />
+                  <Button size="sm" variant="primary" loading={savingDate} onClick={handleSaveDate}>Guardar</Button>
+                  <Button size="sm" variant="outlined" onClick={() => setEditingDate(false)}>Cancelar</Button>
+                </>
+              ) : (
+                <>
+                  <span>{formatDateTime(detail.sale.createdAt)}</span>
+                  <Button size="sm" variant="outlined" onClick={openEditDate}>Editar fecha</Button>
+                </>
+              )}
             </div>
             <table className="table">
               <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>

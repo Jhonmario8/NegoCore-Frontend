@@ -40,6 +40,16 @@ export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Formats a Date (local time) as the value a <input type="datetime-local"> expects: "YYYY-MM-DDTHH:mm"
+export function toDateTimeLocalValue(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function nowDateTimeLocal() {
+  return toDateTimeLocalValue(new Date());
+}
+
 export function resolveImageUrl(url) {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;

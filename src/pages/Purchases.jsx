@@ -13,7 +13,7 @@ import {
   Button, Card, EmptyState, Field, Select, Input, PageLoading, Badge, Modal, PlusIcon,
 } from "../components/ui";
 import PaymentModal from "../components/PaymentModal";
-import { formatMoney, formatDateTime, errorMessage } from "../utils/format";
+import { formatMoney, formatDateTime, errorMessage, nowDateTimeLocal, toDateTimeLocalValue } from "../utils/format";
 
 const STATUS_TONE = { PAID: "success", PARTIAL: "warning", CANCELLED: "danger" };
 const STATUS_LABEL = { PAID: "Pagada", PARTIAL: "Parcial", CANCELLED: "Cancelada" };
@@ -60,11 +60,15 @@ export default function Purchases() {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paidAmount, setPaidAmount] = useState("");
   const [shippingCost, setShippingCost] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(nowDateTimeLocal());
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
   const [showPay, setShowPay] = useState(false);
   const [paying, setPaying] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [dateForm, setDateForm] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
   const receiptRef = useRef(null);
 
   const itemsTotal = useMemo(
@@ -98,6 +102,7 @@ export default function Purchases() {
     setPaymentMethod("CASH");
     setPaidAmount("");
     setShippingCost("");
+    setPurchaseDate(nowDateTimeLocal());
   }
 
   async function handleSubmit(e) {
@@ -123,6 +128,7 @@ export default function Purchases() {
         paymentMethod,
         paidAmount: paidAmount === "" ? total : Number(paidAmount),
         shippingCost: Number(shippingCost) || 0,
+        createdAt: purchaseDate || undefined,
       });
       notify.success("Compra registrada. El stock ya se actualizó.");
       resetForm();
@@ -144,8 +150,29 @@ export default function Purchases() {
     try {
       const res = await purchasesApi.get(activeBusinessId, purchaseId);
       setDetail(res);
+      setEditingDate(false);
     } catch (err) {
       notify.error(errorMessage(err));
+    }
+  }
+
+  function openEditDate() {
+    setDateForm(toDateTimeLocalValue(new Date(detail.purchase.createdAt)));
+    setEditingDate(true);
+  }
+
+  async function handleSaveDate() {
+    setSavingDate(true);
+    try {
+      await purchasesApi.updateDate(activeBusinessId, detail.purchase.id, dateForm);
+      notify.success("Fecha actualizada.");
+      setEditingDate(false);
+      reload();
+      openDetail(detail.purchase.id);
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSavingDate(false);
     }
   }
 
@@ -302,6 +329,14 @@ export default function Purchases() {
               <Field label="Costo de envío">
                 <Input type="number" min="0" step="0.01" placeholder="0" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} />
               </Field>
+              <Field label="Fecha de la compra">
+                <Input
+                  type="datetime-local"
+                  value={purchaseDate}
+                  max={nowDateTimeLocal()}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </Field>
               <Field label={`Monto pagado (total: ${formatMoney(total, currency)})`}>
                 <Input type="number" min="0" step="0.01" placeholder={String(total)} value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
               </Field>
@@ -321,7 +356,7 @@ export default function Purchases() {
         return (
           <Modal
             title={`Compra #${detail.purchase.id}`}
-            onClose={() => setDetail(null)}
+            onClose={() => { setDetail(null); setEditingDate(false); }}
             footer={
               <>
                 <Button variant="outlined" loading={exporting} onClick={handleDownloadReceipt}>
@@ -335,6 +370,27 @@ export default function Purchases() {
           >
             <div style={{ marginBottom: 10 }}>
               <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 13 }}>
+              <span style={{ color: "var(--color-text-muted)" }}>Fecha:</span>
+              {editingDate ? (
+                <>
+                  <Input
+                    type="datetime-local"
+                    value={dateForm}
+                    max={nowDateTimeLocal()}
+                    onChange={(e) => setDateForm(e.target.value)}
+                    style={{ width: 210 }}
+                  />
+                  <Button size="sm" variant="primary" loading={savingDate} onClick={handleSaveDate}>Guardar</Button>
+                  <Button size="sm" variant="outlined" onClick={() => setEditingDate(false)}>Cancelar</Button>
+                </>
+              ) : (
+                <>
+                  <span>{formatDateTime(detail.purchase.createdAt)}</span>
+                  <Button size="sm" variant="outlined" onClick={openEditDate}>Editar fecha</Button>
+                </>
+              )}
             </div>
             <table className="table">
               <thead><tr><th>Producto</th><th>Cant.</th><th>Costo</th><th>Subtotal</th></tr></thead>
