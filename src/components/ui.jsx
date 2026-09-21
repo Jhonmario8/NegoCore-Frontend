@@ -61,9 +61,10 @@ export function EmptyState({ title, description, action }) {
 }
 
 export function Modal({ title, onClose, children, footer, wide }) {
+  const maxWidth = typeof wide === "number" ? wide : wide ? 620 : undefined;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={wide ? { maxWidth: 620 } : undefined}>
+      <div className="modal" style={maxWidth ? { maxWidth } : undefined}>
         <div className="modal-header">
           <h3>{title}</h3>
           <IconButton onClick={onClose} aria-label="Cerrar">
