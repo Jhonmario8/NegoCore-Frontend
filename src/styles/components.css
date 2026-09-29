@@ -345,6 +345,7 @@ table.table tr:hover td { background: var(--color-surface-hover); }
 }
 .alert-error { background: rgba(255, 107, 107, 0.1); color: var(--color-danger); border-color: rgba(255, 107, 107, 0.3); }
 .alert-success { background: rgba(62, 207, 142, 0.1); color: var(--color-success); border-color: rgba(62, 207, 142, 0.3); }
+.alert-info { background: rgba(108, 92, 231, 0.1); color: var(--color-secondary); border-color: rgba(108, 92, 231, 0.3); }
 
 /* ---------- POS grid ---------- */
 .pos-layout { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }

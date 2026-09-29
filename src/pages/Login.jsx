@@ -34,6 +34,11 @@ export default function Login() {
           <p>Gestiona tu negocio en un solo lugar</p>
         </div>
 
+        <div className="alert alert-info">
+          El backend puede tardar hasta un minuto en responder la primera vez
+          (el servidor gratuito se “duerme” tras un rato sin uso).
+        </div>
+
         {error && <div className="alert alert-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
