@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 class ApiError extends Error {
   constructor(message, status, body) {
@@ -13,7 +13,7 @@ function getToken() {
 }
 
 async function request(path, { method = "GET", body, params, auth = true } = {}) {
-  let url = `${BASE_URL}${path}`;
+  let url = `${API_BASE_URL}${path}`;
   if (params) {
     const qs = Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
@@ -35,9 +35,9 @@ async function request(path, { method = "GET", body, params, auth = true } = {})
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-  } catch (e) {
+  } catch {
     throw new ApiError(
-      "No se pudo conectar con el servidor. Verifica que el backend esté corriendo en " + BASE_URL,
+      "No se pudo conectar con el servidor. Verifica que el backend esté corriendo en " + API_BASE_URL,
       0,
       null
     );

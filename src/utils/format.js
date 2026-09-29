@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "../api/client";
+
 export function formatMoney(value, currency = "COP") {
   const n = Number(value ?? 0);
   try {
@@ -53,6 +55,5 @@ export function nowDateTimeLocal() {
 export function resolveImageUrl(url) {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  const base = import.meta.env.VITE_API_URL || "http://localhost:8080";
-  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
+  return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }

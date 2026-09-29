@@ -5,7 +5,6 @@ import { useBusiness } from "../context/BusinessContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { Card, PageLoading, Input, Field, Button } from "../components/ui";
 import { formatMoney, todayISO, errorMessage } from "../utils/format";
-import { useToast } from "../context/ToastContext";
 
 function firstDayOfMonthISO() {
   const d = new Date();
@@ -14,7 +13,6 @@ function firstDayOfMonthISO() {
 
 export default function Overview() {
   const { activeBusiness } = useBusiness();
-  const notify = useToast();
   const [range, setRange] = useState({ from: firstDayOfMonthISO(), to: todayISO() });
 
   const { data, loading, reload, error } = useBusinessData(
