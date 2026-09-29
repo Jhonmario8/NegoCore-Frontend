@@ -1,6 +1,4 @@
-import { api, getToken } from "./client";
-
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+import { api, getToken, API_BASE_URL } from "./client";
 
 export const catalogApi = {
   listCategories: (businessId) => api.get(`/businesses/${businessId}/categories`),
@@ -28,7 +26,7 @@ export const catalogApi = {
     formData.append("file", file);
     const token = getToken();
     const res = await fetch(
-      `${BASE_URL}/businesses/${businessId}/products/${productId}/image`,
+      `${API_BASE_URL}/businesses/${businessId}/products/${productId}/image`,
       {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
