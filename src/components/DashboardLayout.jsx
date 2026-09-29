@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useBusiness } from "../context/BusinessContext";
@@ -32,12 +33,14 @@ function initials(name) {
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
-  const { businesses, activeBusinessId, setActiveBusinessId, activeBusiness } = useBusiness();
+  const { businesses, activeBusinessId, setActiveBusinessId, activeBusiness, loading } = useBusiness();
   const navigate = useNavigate();
 
-  if (businesses.length === 0) {
-    navigate("/app/businesses");
-  }
+  useEffect(() => {
+    if (!loading && businesses.length === 0) {
+      navigate("/app/businesses");
+    }
+  }, [loading, businesses, navigate]);
 
   return (
     <div className="app-shell">
