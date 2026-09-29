@@ -1,149 +1,127 @@
 # NegoCore — Frontend
 
-A React single-page app for small-business management: catalog, clients and
-providers, sales, purchases, orders, debts/payables, expenses, quotes and a
-balance overview. Talks to the [NegoCore backend](https://github.com/Jhonmario8/NegoCore-Backend)
-over a plain REST API with a JWT bearer token.
+Una aplicación de una sola página (SPA) en React para gestión de pequeños
+negocios: catálogo, clientes y proveedores, ventas, compras, pedidos,
+deudas/cuentas por pagar, gastos, cotizaciones y un resumen de balance. Habla
+con el [backend de NegoCore](https://github.com/Jhonmario8/NegoCore-Backend)
+a través de una API REST simple con token JWT.
 
-- **Live app**: https://nego-core-frontend.vercel.app
+- **App en vivo**: https://nego-core-frontend.vercel.app
 - **Backend / API**: https://negocore-backend.onrender.com
 
-> The backend runs on a free-tier host that spins down when idle, so the
-> first login after a while can take up to ~1 minute — the login screen
-> shows a notice about this so it doesn't read as a broken app.
+> El backend corre en un host de plan gratuito que se apaga cuando está
+> inactivo, así que el primer login después de un rato puede tardar hasta
+> ~1 minuto — la pantalla de login muestra un aviso sobre esto para que no
+> parezca una app rota.
 
-## Tech stack
+## Stack tecnológico
 
-| Concern | Choice |
+| Aspecto | Elección |
 |---|---|
 | Framework | React 19 |
-| Routing | react-router-dom 7, `HashRouter` (works on a static host with no server-side rewrite rules) |
-| Build tool | Vite 8 |
+| Enrutamiento | react-router-dom 7, `HashRouter` (funciona en un host estático sin reglas de reescritura del lado del servidor) |
+| Herramienta de build | Vite 8 |
 | Linting | oxlint |
-| State | React Context (no Redux/Zustand) — `AuthContext`, `BusinessContext`, `ToastContext` |
-| Styling | Plain CSS with custom properties (design tokens), no CSS framework |
-| Image export | `html-to-image` — renders a sale/purchase receipt or a quote as a downloadable PNG |
+| Estado | React Context (sin Redux/Zustand) — `AuthContext`, `BusinessContext`, `ToastContext` |
+| Estilos | CSS plano con custom properties (design tokens), sin framework de CSS |
+| Exportación de imágenes | `html-to-image` — renderiza un recibo de venta/compra o una cotización como PNG descargable |
 | CI | GitHub Actions (lint + build) |
 
-There is currently no test runner configured (no Vitest/Jest/RTL) — see
-"Known limitations" below.
+Actualmente no hay ningún test runner configurado (sin Vitest/Jest/RTL).
 
-## Architecture
+## Arquitectura
 
 ```mermaid
 flowchart TB
     App["App.jsx"]
     Toast["ToastProvider"]
-    Auth["AuthProvider<br/>(token + user in localStorage)"]
-    Business["BusinessProvider<br/>(active business + list)"]
+    Auth["AuthProvider<br/>(token + usuario en localStorage)"]
+    Business["BusinessProvider<br/>(negocio activo + lista)"]
     Router["HashRouter"]
 
-    Public["Public routes<br/>/login, /register"]
-    Guard["RequireAuth<br/>(redirects to /login if no token)"]
-    Layout["DashboardLayout<br/>(topbar, business switcher, nav)"]
-    Pages["Pages<br/>Overview, Products, Sales, Purchases,<br/>Orders, Clients, Providers, Debts,<br/>Expenses, Cotizaciones, Categories"]
+    Public["Rutas públicas<br/>/login, /register"]
+    Guard["RequireAuth<br/>(redirige a /login si no hay token)"]
+    Layout["DashboardLayout<br/>(barra superior, selector de negocio, nav)"]
+    Pages["Páginas<br/>Overview, Products, Sales, Purchases,<br/>Orders, Clients, Providers, Debts,<br/>Expenses, Cotizaciones, Categories"]
 
-    Client["api/client.js<br/>(fetch wrapper, attaches Bearer token)"]
-    Backend[("NegoCore backend")]
+    Client["api/client.js<br/>(wrapper de fetch, agrega el token Bearer)"]
+    Backend[("Backend de NegoCore")]
 
     App --> Toast --> Auth --> Business --> Router
     Router --> Public
     Router --> Guard --> Layout --> Pages
-    Pages -->|api/*.js modules| Client -->|HTTPS| Backend
+    Pages -->|módulos api/*.js| Client -->|HTTPS| Backend
 ```
 
-Every domain area has its own thin API module under `src/api/` (`catalog.js`,
-`crm.js`, `sales.js`, `purchases.js`, `orders.js`, `quotes.js`, `finance.js`,
-`auth.js`, `business.js`) — all of them go through the shared `api` helper in
-`api/client.js`, which centralizes the base URL, the `Authorization` header,
-and turning a non-2xx response into a thrown `ApiError`.
+Cada área de dominio tiene su propio módulo delgado de API bajo `src/api/`
+(`catalog.js`, `crm.js`, `sales.js`, `purchases.js`, `orders.js`,
+`quotes.js`, `finance.js`, `auth.js`, `business.js`) — todos pasan por el
+helper compartido `api` en `api/client.js`, que centraliza la URL base, el
+header `Authorization`, y convierte una respuesta no-2xx en un `ApiError`
+lanzado.
 
-### Auth flow
+### Flujo de autenticación
 
 ```mermaid
 sequenceDiagram
-    participant U as User
+    participant U as Usuario
     participant L as Login.jsx
     participant AC as AuthContext
     participant API as api/auth.js -> backend
     participant BC as BusinessContext
 
-    U->>L: submit email + password
+    U->>L: envía email + contraseña
     L->>AC: login({ email, password })
     AC->>API: POST /auth/login
     API-->>AC: { token, userId, userName, phoneNumber }
-    AC->>AC: write token to localStorage (sync, before setState)
-    AC-->>L: resolved
+    AC->>AC: escribe el token en localStorage (síncrono, antes del setState)
+    AC-->>L: resuelto
     L->>L: navigate("/app")
-    Note over BC: mounted under AuthProvider,<br/>its effect reads isAuthenticated
-    BC->>API: GET /businesses (with the token just stored)
-    API-->>BC: business list
+    Note over BC: montado bajo AuthProvider,<br/>su efecto lee isAuthenticated
+    BC->>API: GET /businesses (con el token recién guardado)
+    API-->>BC: lista de negocios
 ```
 
-The token and user are persisted to `localStorage` (`negocore_token`,
-`negocore_user`); `AuthContext.login` writes the token synchronously (not
-only through its `useEffect`) so that `BusinessContext`'s effect — which
-fires in the same commit — already sees it when it fetches the business
-list. `RequireAuth` simply checks `isAuthenticated` (whether a token is
-present) and redirects to `/login` otherwise; there's no token expiry check
-on the client, so an expired token is only discovered when a request comes
-back 401/expired from the backend.
+El token y el usuario se persisten en `localStorage` (`negocore_token`,
+`negocore_user`); `AuthContext.login` escribe el token de forma síncrona (no
+solo a través de su `useEffect`) para que el efecto de `BusinessContext` —
+que se dispara en el mismo commit — ya lo vea al pedir la lista de negocios.
+`RequireAuth` simplemente verifica `isAuthenticated` (si hay un token
+presente) y redirige a `/login` si no lo hay; no hay verificación de
+expiración de token en el cliente, así que un token vencido solo se
+descubre cuando una petición vuelve como 401/expirada desde el backend.
 
-## Getting started
+## Primeros pasos
 
-### Prerequisites
+### Requisitos previos
 
-- Node.js `^20.19.0` or `>=22.12.0` (required by Vite 8)
-- A running instance of the [NegoCore backend](https://github.com/Jhonmario8/NegoCore-Backend)
+- Node.js `^20.19.0` o `>=22.12.0` (requerido por Vite 8)
+- Una instancia en ejecución del [backend de NegoCore](https://github.com/Jhonmario8/NegoCore-Backend)
 
-### Setup
+### Configuración inicial
 
 ```bash
 npm install
-cp .env.example .env   # edit VITE_API_URL if your backend isn't on localhost:8080
+cp .env.example .env   # edita VITE_API_URL si tu backend no está en localhost:8080
 npm run dev
 ```
 
-### Environment variables
+### Variables de entorno
 
-| Variable | Required | Description |
+| Variable | Requerida | Descripción |
 |---|---|---|
-| `VITE_API_URL` | no | Base URL of the backend API. Defaults to `http://localhost:8080` if unset. |
+| `VITE_API_URL` | no | URL base de la API del backend. Por defecto `http://localhost:8080` si no se define. |
 
 ### Scripts
 
-| Command | Description |
+| Comando | Descripción |
 |---|---|
-| `npm run dev` | Start the Vite dev server |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview the production build locally |
-| `npm run lint` | Run oxlint |
+| `npm run dev` | Inicia el servidor de desarrollo de Vite |
+| `npm run build` | Build de producción en `dist/` |
+| `npm run preview` | Previsualiza el build de producción localmente |
+| `npm run lint` | Corre oxlint |
 
 ## CI
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm ci`,
-`npm run lint` and `npm run build` on every push and pull request to `main`.
-
-## Known limitations / possible next steps
-
-Written honestly, not as a to-do list to impress — these are real gaps:
-
-- **No automated tests.** No Vitest/Jest/React Testing Library is set up;
-  correctness today relies on manual testing and the backend's own test
-  suite. CI only lints and builds.
-- **`AuthContext`, `BusinessContext` and `ToastContext` each export both a
-  provider component and a hook/constant from the same file**, which
-  disables Vite's Fast Refresh for those files (flagged by oxlint's
-  `react/only-export-components` rule) — splitting the hook into its own
-  file would fix it, not done yet to avoid touching working files without a
-  concrete need.
-- **No client-side token expiry handling.** A stale token isn't detected
-  until a request actually fails; there's no proactive redirect to `/login`
-  when the JWT's 10-hour window has passed.
-- **No pagination in the UI** for lists that can grow (products, sales,
-  purchases, clients) — this mirrors the backend, which also doesn't
-  paginate those endpoints yet.
-- **The backend's audit log endpoint has no page here** — it exists and
-  works, but nothing in this app surfaces it yet.
-- **No offline/retry handling** beyond the single cold-start notice on the
-  login screen — a mid-session network blip surfaces as a raw error toast.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre `npm ci`,
+`npm run lint` y `npm run build` en cada push y pull request a `main`.
