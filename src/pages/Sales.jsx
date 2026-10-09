@@ -103,7 +103,7 @@ function Pos({ currency, businessId, onSold }) {
       notify.error("El precio de cada producto debe ser mayor a 0.");
       return;
     }
-    const paid = paidAmount === "" ? total : Number(paidAmount);
+    const paid = paidAmount === "" ? 0 : Number(paidAmount);
     if (paid < total && !clientId) {
       notify.error("Para una venta con saldo pendiente debes seleccionar un cliente.");
       return;
@@ -226,8 +226,9 @@ function Pos({ currency, businessId, onSold }) {
             <Input
               type="number"
               min="0"
+              max={total}
               step="0.01"
-              placeholder={String(total)}
+              placeholder="0"
               value={paidAmount}
               onChange={(e) => setPaidAmount(e.target.value)}
             />
@@ -253,11 +254,10 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
   const [filters, setFilters] = useState({ status: "", clientSearch: "", from: "", to: "" });
   const { data: sales, loading, reload } = useBusinessData(
     (id) => salesApi.list(id, {
-      status: filters.status || undefined,
       from: filters.from || undefined,
       to: filters.to || undefined,
     }),
-    [filters.status, filters.from, filters.to, refreshKey]
+    [filters.from, filters.to, refreshKey]
   );
   const { data: debts, reload: reloadDebts } = useBusinessData((id) => financeApi.listDebts(id), [refreshKey]);
   const { data: products } = useBusinessData((id) => catalogApi.listProducts(id));
@@ -294,9 +294,11 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
 
   const filteredSales = useMemo(() => {
     const search = filters.clientSearch.trim().toLowerCase();
-    if (!search) return sales || [];
-    return (sales || []).filter((s) => clientLabel(s).toLowerCase().includes(search));
-  }, [sales, filters.clientSearch, clientsById]);
+    return (sales || []).filter((s) => {
+      if (filters.status && effectiveStatus(s) !== filters.status) return false;
+      return !search || clientLabel(s).toLowerCase().includes(search);
+    });
+  }, [sales, filters.status, filters.clientSearch, clientsById, debtsBySaleId]);
 
   const [detail, setDetail] = useState(null);
   const [cancelling, setCancelling] = useState(false);

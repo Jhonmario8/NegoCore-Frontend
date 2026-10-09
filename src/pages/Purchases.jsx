@@ -33,8 +33,8 @@ export default function Purchases() {
   }, [products]);
   const [filters, setFilters] = useState({ providerSearch: "", status: "" });
   const { data: purchases, loading, reload } = useBusinessData(
-    (id) => purchasesApi.list(id, { status: filters.status || undefined }),
-    [filters.status]
+    (id) => purchasesApi.list(id),
+    []
   );
   const { data: payables, reload: reloadPayables } = useBusinessData((id) => financeApi.listPayables(id));
   const payablesByPurchaseId = useMemo(() => {
@@ -174,9 +174,11 @@ export default function Purchases() {
 
   const filteredPurchases = useMemo(() => {
     const search = filters.providerSearch.trim().toLowerCase();
-    if (!search) return purchases || [];
-    return (purchases || []).filter((p) => providerName(p.providerId).toLowerCase().includes(search));
-  }, [purchases, filters.providerSearch, providers]);
+    return (purchases || []).filter((p) => {
+      if (filters.status && effectiveStatus(p) !== filters.status) return false;
+      return !search || providerName(p.providerId).toLowerCase().includes(search);
+    });
+  }, [purchases, filters.status, filters.providerSearch, providers, payablesByPurchaseId]);
 
   async function openDetail(purchaseId) {
     try {
