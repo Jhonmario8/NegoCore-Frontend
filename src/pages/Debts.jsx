@@ -123,10 +123,10 @@ function PaymentHistoryModal({ title, currency, fetchPayments, onUpdatePayment, 
 function Receivables() {
   const { activeBusiness } = useBusiness();
   const notify = useToast();
-  const [filters, setFilters] = useState({ status: "PARTIAL", clientSearch: "" });
+  const [filters, setFilters] = useState({ status: "UNPAID", clientSearch: "" });
   const { data: clients } = useBusinessData((id) => clientsApi.list(id));
   const { data: debts, loading, reload, businessId } = useBusinessData(
-    (id) => financeApi.listDebts(id, { status: filters.status || undefined }),
+    (id) => financeApi.listGroupedDebts(id, { status: filters.status && filters.status !== "UNPAID" ? filters.status : undefined }),
     [filters.status]
   );
 
@@ -149,9 +149,10 @@ function Receivables() {
 
   const filteredDebts = useMemo(() => {
     const search = filters.clientSearch.trim().toLowerCase();
-    if (!search) return debts || [];
-    return (debts || []).filter((d) => debtorLabel(d).toLowerCase().includes(search));
-  }, [debts, filters.clientSearch, clients]);
+    return (debts || [])
+      .filter((d) => filters.status !== "UNPAID" || d.status === "PENDING" || d.status === "PARTIAL")
+      .filter((d) => !search || debtorLabel(d).toLowerCase().includes(search));
+  }, [debts, filters.clientSearch, filters.status, clients]);
 
   const totalPending = (debts || [])
     .filter((d) => d.status === "PENDING" || d.status === "PARTIAL")
@@ -161,11 +162,19 @@ function Receivables() {
     e.preventDefault();
     setPaying(true);
     try {
-      await financeApi.payDebt(businessId, payTarget.id, {
-        amount: Number(payForm.amount),
-        paymentMethod: payForm.paymentMethod,
-      });
-      notify.success("Abono registrado.");
+      if (payTarget.clientId) {
+        await financeApi.payClientDebt(businessId, payTarget.clientId, {
+          amount: Number(payForm.amount),
+          paymentMethod: payForm.paymentMethod,
+        });
+        notify.success("El abono se aplicó a la(s) venta(s) más antigua(s).");
+      } else {
+        await financeApi.payDebt(businessId, payTarget.id, {
+          amount: Number(payForm.amount),
+          paymentMethod: payForm.paymentMethod,
+        });
+        notify.success("Abono registrado.");
+      }
       setPayTarget(null);
       reload();
     } catch (err) {
@@ -213,6 +222,7 @@ function Receivables() {
         <div style={{ display: "flex", gap: 8 }}>
         <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
           <option value="">Todos los estados</option>
+          <option value="UNPAID">No pagados</option>
           <option value="PENDING">Pendiente</option>
           <option value="PARTIAL">Parcial</option>
           <option value="PAID">Pagada</option>
@@ -369,8 +379,12 @@ function Receivables() {
         <PaymentHistoryModal
           title={`Historial de abonos de ${debtorLabel(historyTarget)}`}
           currency={activeBusiness?.currency}
-          fetchPayments={() => financeApi.listDebtPayments(businessId, historyTarget.id)}
-          onUpdatePayment={(paymentId, payload) => financeApi.updateDebtPayment(businessId, historyTarget.id, paymentId, payload)}
+          fetchPayments={() => (historyTarget.clientId
+            ? financeApi.listClientDebtPayments(businessId, historyTarget.clientId)
+            : financeApi.listDebtPayments(businessId, historyTarget.id))}
+          onUpdatePayment={(paymentId, payload) => (historyTarget.clientId
+            ? financeApi.updateClientDebtPayment(businessId, historyTarget.clientId, paymentId, payload)
+            : financeApi.updateDebtPayment(businessId, historyTarget.id, paymentId, payload))}
           onClose={() => setHistoryTarget(null)}
           onChanged={reload}
         />
@@ -382,14 +396,13 @@ function Receivables() {
 function Payables() {
   const { activeBusiness } = useBusiness();
   const notify = useToast();
-  const [filters, setFilters] = useState({ status: "PARTIAL", payeeType: "", search: "" });
+  const [filters, setFilters] = useState({ status: "UNPAID", payeeType: "", search: "" });
   const { data: providers } = useBusinessData((id) => providersApi.list(id));
   const { data: payables, loading, reload, businessId } = useBusinessData(
-    (id) => financeApi.listPayables(id, {
-      status: filters.status || undefined,
-      payeeType: filters.payeeType || undefined,
+    (id) => financeApi.listGroupedPayables(id, {
+      status: filters.status && filters.status !== "UNPAID" ? filters.status : undefined,
     }),
-    [filters.status, filters.payeeType]
+    [filters.status]
   );
 
   const [payTarget, setPayTarget] = useState(null);
@@ -407,9 +420,11 @@ function Payables() {
 
   const filteredPayables = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
-    if (!search) return payables || [];
-    return (payables || []).filter((p) => payeeLabel(p).toLowerCase().includes(search));
-  }, [payables, filters.search, providers]);
+    return (payables || [])
+      .filter((p) => filters.status !== "UNPAID" || p.status === "PENDING" || p.status === "PARTIAL")
+      .filter((p) => !filters.payeeType || p.payeeType === filters.payeeType)
+      .filter((p) => !search || payeeLabel(p).toLowerCase().includes(search));
+  }, [payables, filters.search, filters.payeeType, filters.status, providers]);
 
   const totalPending = (payables || [])
     .filter((p) => p.status === "PENDING" || p.status === "PARTIAL")
@@ -419,11 +434,19 @@ function Payables() {
     e.preventDefault();
     setPaying(true);
     try {
-      await financeApi.payPayable(businessId, payTarget.id, {
-        amount: Number(payForm.amount),
-        paymentMethod: payForm.paymentMethod,
-      });
-      notify.success("Pago registrado.");
+      if (payTarget.payeeType === "PROVIDER" && payTarget.providerId) {
+        await financeApi.payProviderPayable(businessId, payTarget.providerId, {
+          amount: Number(payForm.amount),
+          paymentMethod: payForm.paymentMethod,
+        });
+        notify.success("El pago se aplicó a la(s) compra(s) más antigua(s).");
+      } else {
+        await financeApi.payPayable(businessId, payTarget.id, {
+          amount: Number(payForm.amount),
+          paymentMethod: payForm.paymentMethod,
+        });
+        notify.success("Pago registrado.");
+      }
       setPayTarget(null);
       reload();
     } catch (err) {
@@ -445,6 +468,7 @@ function Payables() {
       <div className="filters-row">
         <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
           <option value="">Todos los estados</option>
+          <option value="UNPAID">No pagados</option>
           <option value="PENDING">Pendiente</option>
           <option value="PARTIAL">Parcial</option>
           <option value="PAID">Pagada</option>
@@ -566,8 +590,12 @@ function Payables() {
         <PaymentHistoryModal
           title={`Historial de pagos a ${payeeLabel(historyTarget)}`}
           currency={activeBusiness?.currency}
-          fetchPayments={() => financeApi.listPayablePayments(businessId, historyTarget.id)}
-          onUpdatePayment={(paymentId, payload) => financeApi.updatePayablePayment(businessId, historyTarget.id, paymentId, payload)}
+          fetchPayments={() => (historyTarget.payeeType === "PROVIDER" && historyTarget.providerId
+            ? financeApi.listProviderPayablePayments(businessId, historyTarget.providerId)
+            : financeApi.listPayablePayments(businessId, historyTarget.id))}
+          onUpdatePayment={(paymentId, payload) => (historyTarget.payeeType === "PROVIDER" && historyTarget.providerId
+            ? financeApi.updateProviderPayablePayment(businessId, historyTarget.providerId, paymentId, payload)
+            : financeApi.updatePayablePayment(businessId, historyTarget.id, paymentId, payload))}
           onClose={() => setHistoryTarget(null)}
           onChanged={reload}
         />
