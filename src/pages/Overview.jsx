@@ -62,6 +62,10 @@ export default function Overview() {
               <div className="label">Gastos totales</div>
               <div className="value">{formatMoney(data?.totalExpenses, activeBusiness?.currency)}</div>
             </div>
+            <div className="stat-card">
+              <div className="label">Gastado en compras</div>
+              <div className="value">{formatMoney(data?.totalPurchases, activeBusiness?.currency)}</div>
+            </div>
             <div className="stat-card accent-secondary">
               <div className="label">Ganancia</div>
               <div className="value">{formatMoney(data?.profit, activeBusiness?.currency)}</div>

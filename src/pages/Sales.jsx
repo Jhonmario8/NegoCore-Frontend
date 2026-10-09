@@ -250,15 +250,14 @@ function Pos({ currency, businessId, onSold }) {
 function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
   const notify = useToast();
   const { user } = useAuth();
-  const [filters, setFilters] = useState({ status: "", clientId: "", from: "", to: "" });
+  const [filters, setFilters] = useState({ status: "", clientSearch: "", from: "", to: "" });
   const { data: sales, loading, reload } = useBusinessData(
     (id) => salesApi.list(id, {
       status: filters.status || undefined,
-      clientId: filters.clientId || undefined,
       from: filters.from || undefined,
       to: filters.to || undefined,
     }),
-    [filters.status, filters.clientId, filters.from, filters.to, refreshKey]
+    [filters.status, filters.from, filters.to, refreshKey]
   );
   const { data: debts, reload: reloadDebts } = useBusinessData((id) => financeApi.listDebts(id), [refreshKey]);
   const { data: products } = useBusinessData((id) => catalogApi.listProducts(id));
@@ -289,6 +288,15 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
     if (sale.status === "CANCELLED") return "CANCELLED";
     return effectivePaidAmount(sale) >= sale.total ? "PAID" : "PARTIAL";
   }
+  function clientLabel(sale) {
+    return sale.clientId ? (clientsById.get(sale.clientId)?.name || `Cliente #${sale.clientId}`) : "Consumidor final";
+  }
+
+  const filteredSales = useMemo(() => {
+    const search = filters.clientSearch.trim().toLowerCase();
+    if (!search) return sales || [];
+    return (sales || []).filter((s) => clientLabel(s).toLowerCase().includes(search));
+  }, [sales, filters.clientSearch, clientsById]);
 
   const [detail, setDetail] = useState(null);
   const [cancelling, setCancelling] = useState(false);
@@ -299,6 +307,96 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
   const [dateForm, setDateForm] = useState("");
   const [savingDate, setSavingDate] = useState(false);
   const receiptRef = useRef(null);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaleId, setEditSaleId] = useState(null);
+  const [editItems, setEditItems] = useState([]);
+  const [editClientId, setEditClientId] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("CASH");
+  const [editPaidAmount, setEditPaidAmount] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  const editTotal = useMemo(
+    () => editItems.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0),
+    [editItems]
+  );
+
+  function updateEditItem(idx, field, value) {
+    setEditItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  }
+  function selectEditProductByName(idx, name) {
+    const match = products?.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    setEditItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      if (match) {
+        return { ...it, productId: String(match.id), productName: match.name, unitPrice: String(match.salePrice) };
+      }
+      return { ...it, productId: "", productName: name };
+    }));
+  }
+  function addEditItem() {
+    setEditItems((prev) => [...prev, { productId: "", productName: "", quantity: "1", unitPrice: "" }]);
+  }
+  function removeEditItem(idx) {
+    setEditItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function openEditSale() {
+    const { sale, items } = detail;
+    setEditSaleId(sale.id);
+    setEditItems(
+      items.map((i) => ({
+        productId: String(i.productId),
+        productName: productsById.get(i.productId)?.name || `#${i.productId}`,
+        quantity: String(i.quantity),
+        unitPrice: String(i.unitPrice),
+      }))
+    );
+    setEditClientId(sale.clientId ? String(sale.clientId) : "");
+    setEditPaymentMethod(sale.paymentMethod);
+    setEditPaidAmount(String(sale.paidAmount));
+    setDetail(null);
+    setEditOpen(true);
+  }
+
+  async function handleEditSubmit(e) {
+    e.preventDefault();
+    const validItems = editItems.filter((i) => i.productId && Number(i.quantity) > 0);
+    if (validItems.length === 0) {
+      notify.error("Agrega al menos un producto.");
+      return;
+    }
+    if (validItems.some((i) => !i.unitPrice || Number(i.unitPrice) <= 0)) {
+      notify.error("El precio de cada producto debe ser mayor a 0.");
+      return;
+    }
+    const paid = editPaidAmount === "" ? editTotal : Number(editPaidAmount);
+    if (paid < editTotal && !editClientId) {
+      notify.error("Para una venta con saldo pendiente debes seleccionar un cliente.");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await salesApi.update(businessId, editSaleId, {
+        saleItems: validItems.map((i) => ({
+          productId: Number(i.productId),
+          quantity: Number(i.quantity),
+          unitPrice: Number(i.unitPrice),
+        })),
+        paymentMethod: editPaymentMethod,
+        paidAmount: paid,
+        clientId: editClientId ? Number(editClientId) : undefined,
+      });
+      notify.success("Venta actualizada. El stock ya se ajustó.");
+      setEditOpen(false);
+      reload();
+      reloadDebts();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function openDetail(saleId) {
     try {
@@ -386,6 +484,11 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
           <option value="PARTIAL">Parcial</option>
           <option value="CANCELLED">Cancelada</option>
         </Select>
+        <Input
+          placeholder="Buscar cliente…"
+          value={filters.clientSearch}
+          onChange={(e) => setFilters({ ...filters, clientSearch: e.target.value })}
+        />
         <Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
         <Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
       </div>
@@ -395,16 +498,18 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
           <PageLoading />
         ) : !sales || sales.length === 0 ? (
           <EmptyState title="Sin ventas registradas" description="Las ventas que registres aparecerán aquí." />
+        ) : filteredSales.length === 0 ? (
+          <EmptyState title="Sin resultados" description="Ningún cliente coincide con la búsqueda." />
         ) : (
           <table className="table">
             <thead>
               <tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Pagado</th><th>Método</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
-              {sales.map((s) => (
+              {filteredSales.map((s) => (
                 <tr key={s.id} style={{ cursor: "pointer" }} onClick={() => openDetail(s.id)}>
                   <td>{formatDateTime(s.createdAt)}</td>
-                  <td>{s.clientId ? (clientsById.get(s.clientId)?.name || `Cliente #${s.clientId}`) : "Consumidor final"}</td>
+                  <td>{clientLabel(s)}</td>
                   <td>{formatMoney(s.total, currency)}</td>
                   <td>{formatMoney(effectivePaidAmount(s), currency)}</td>
                   <td>{s.paymentMethod}</td>
@@ -433,6 +538,7 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
                 </Button>
                 {detail.sale.status !== "CANCELLED" && (
                   <>
+                    <Button variant="outlined" onClick={openEditSale}>Editar venta</Button>
                     {canPay && (
                       <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
                     )}
@@ -580,6 +686,63 @@ function SalesHistory({ businessId, currency, activeBusiness, refreshKey }) {
           onClose={() => setShowPay(false)}
           onSubmit={handlePay}
         />
+      )}
+
+      {editOpen && (
+        <Modal
+          title={`Editar venta #${editSaleId}`}
+          wide
+          onClose={() => setEditOpen(false)}
+          footer={
+            <>
+              <Button variant="outlined" onClick={() => setEditOpen(false)}>Cancelar</Button>
+              <Button variant="primary" loading={editSaving} onClick={handleEditSubmit}>Guardar cambios</Button>
+            </>
+          }
+        >
+          <form onSubmit={handleEditSubmit}>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Productos</label>
+            <datalist id="sale-edit-products-list">
+              {products?.map((p) => <option key={p.id} value={p.name} />)}
+            </datalist>
+            {editItems.map((it, idx) => (
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 8, marginTop: 8, alignItems: "center" }}>
+                <Input
+                  list="sale-edit-products-list"
+                  placeholder="Buscar producto…"
+                  value={it.productName}
+                  onChange={(e) => selectEditProductByName(idx, e.target.value)}
+                />
+                <Input type="number" min="1" placeholder="Cant." value={it.quantity} onChange={(e) => updateEditItem(idx, "quantity", e.target.value)} />
+                <Input type="number" min="0" step="0.01" placeholder="Precio unit." value={it.unitPrice} onChange={(e) => updateEditItem(idx, "unitPrice", e.target.value)} />
+                <Button type="button" variant="outlined" size="sm" onClick={() => removeEditItem(idx)} disabled={editItems.length === 1}>×</Button>
+              </div>
+            ))}
+            <Button type="button" variant="secondary" size="sm" style={{ marginTop: 10 }} onClick={addEditItem}>
+              + Agregar producto
+            </Button>
+
+            <div className="form-row" style={{ marginTop: 16 }}>
+              <Field label="Cliente (opcional, requerido si es a crédito)">
+                <Select value={editClientId} onChange={(e) => setEditClientId(e.target.value)}>
+                  <option value="">Sin cliente</option>
+                  {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Método de pago">
+                <Select value={editPaymentMethod} onChange={(e) => setEditPaymentMethod(e.target.value)}>
+                  <option value="CASH">Efectivo</option>
+                  <option value="TRANSFER">Transferencia</option>
+                  <option value="CARD">Tarjeta</option>
+                  <option value="MIXED">Mixto</option>
+                </Select>
+              </Field>
+              <Field label={`Monto pagado (total: ${formatMoney(editTotal, currency)})`}>
+                <Input type="number" min="0" step="0.01" placeholder={String(editTotal)} value={editPaidAmount} onChange={(e) => setEditPaidAmount(e.target.value)} />
+              </Field>
+            </div>
+          </form>
+        </Modal>
       )}
     </>
   );

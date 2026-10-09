@@ -1,24 +1,133 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
 import { financeApi } from "../api/finance";
 import { clientsApi, providersApi } from "../api/crm";
 import { useBusiness } from "../context/BusinessContext";
 import { useBusinessData } from "../hooks/useBusinessData";
 import { useToast } from "../context/ToastContext";
-import { Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, PlusIcon } from "../components/ui";
-import { formatMoney, formatDate, errorMessage } from "../utils/format";
+import { Button, Card, EmptyState, Field, Input, Select, Modal, PageLoading, Badge, PlusIcon, IconButton, HistoryIcon } from "../components/ui";
+import { formatMoney, formatDate, formatDateTime, errorMessage } from "../utils/format";
 
 const STATUS_TONE = { PENDING: "warning", PARTIAL: "info", PAID: "success", CANCELLED: "danger" };
 const STATUS_LABEL = { PENDING: "Pendiente", PARTIAL: "Parcial", PAID: "Pagada", CANCELLED: "Cancelada" };
 
+const PAYMENT_METHOD_LABEL = { CASH: "Efectivo", TRANSFER: "Transferencia", CARD: "Tarjeta" };
+
+function PaymentHistoryModal({ title, currency, fetchPayments, onUpdatePayment, onClose, onChanged }) {
+  const notify = useToast();
+  const [payments, setPayments] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({ amount: "", paymentMethod: "CASH" });
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      setPayments(await fetchPayments());
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function startEdit(p) {
+    setEditTarget(p);
+    setEditForm({ amount: String(p.amount), paymentMethod: p.paymentMethod });
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onUpdatePayment(editTarget.id, {
+        amount: Number(editForm.amount),
+        paymentMethod: editForm.paymentMethod,
+      });
+      notify.success("Abono actualizado.");
+      setEditTarget(null);
+      await load();
+      onChanged?.();
+    } catch (err) {
+      notify.error(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      {loading ? (
+        <PageLoading />
+      ) : !payments || payments.length === 0 ? (
+        <EmptyState title="Sin abonos registrados" />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {payments.map((p) => (
+            <div
+              key={p.id}
+              style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "10px 0", borderBottom: "1px solid var(--color-border)",
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 600 }}>{formatMoney(p.amount, currency)}</div>
+                <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>
+                  {PAYMENT_METHOD_LABEL[p.paymentMethod] || p.paymentMethod} · {formatDateTime(p.createdAt)}
+                </div>
+              </div>
+              <Button variant="outlined" size="sm" onClick={() => startEdit(p)}>Editar</Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editTarget && (
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--color-border)" }}>
+          <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginTop: 0 }}>
+            Editando abono del {formatDateTime(editTarget.createdAt)}
+          </p>
+          <form onSubmit={handleSaveEdit}>
+            <Field label="Monto">
+              <Input
+                type="number" min="0.01" step="0.01" required
+                value={editForm.amount}
+                onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+              />
+            </Field>
+            <Field label="Método de pago">
+              <Select value={editForm.paymentMethod} onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}>
+                <option value="CASH">Efectivo</option>
+                <option value="TRANSFER">Transferencia</option>
+                <option value="CARD">Tarjeta</option>
+              </Select>
+            </Field>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Button type="button" variant="outlined" onClick={() => setEditTarget(null)}>Cancelar</Button>
+              <Button type="submit" variant="primary" loading={saving}>Guardar</Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function Receivables() {
   const { activeBusiness } = useBusiness();
   const notify = useToast();
-  const [filters, setFilters] = useState({ status: "", clientId: "" });
+  const [filters, setFilters] = useState({ status: "PARTIAL", clientSearch: "" });
   const { data: clients } = useBusinessData((id) => clientsApi.list(id));
   const { data: debts, loading, reload, businessId } = useBusinessData(
-    (id) => financeApi.listDebts(id, { status: filters.status || undefined, clientId: filters.clientId || undefined }),
-    [filters.status, filters.clientId]
+    (id) => financeApi.listDebts(id, { status: filters.status || undefined }),
+    [filters.status]
   );
 
   const [payTarget, setPayTarget] = useState(null);
@@ -29,12 +138,20 @@ function Receivables() {
   const [loanForm, setLoanForm] = useState({ amount: "", clientId: "", debtorName: "", dueDate: "" });
   const [savingLoan, setSavingLoan] = useState(false);
 
+  const [historyTarget, setHistoryTarget] = useState(null);
+
   function clientName(id) {
     return clients?.find((c) => c.id === id)?.name || `#${id}`;
   }
   function debtorLabel(d) {
     return d.clientId ? clientName(d.clientId) : d.debtorName || "—";
   }
+
+  const filteredDebts = useMemo(() => {
+    const search = filters.clientSearch.trim().toLowerCase();
+    if (!search) return debts || [];
+    return (debts || []).filter((d) => debtorLabel(d).toLowerCase().includes(search));
+  }, [debts, filters.clientSearch, clients]);
 
   const totalPending = (debts || [])
     .filter((d) => d.status === "PENDING" || d.status === "PARTIAL")
@@ -101,10 +218,12 @@ function Receivables() {
           <option value="PAID">Pagada</option>
           <option value="CANCELLED">Cancelada</option>
         </Select>
-        <Select value={filters.clientId} onChange={(e) => setFilters({ ...filters, clientId: e.target.value })}>
-          <option value="">Todos los clientes</option>
-          {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </Select>
+        <Input
+          placeholder="Buscar cliente…"
+          value={filters.clientSearch}
+          onChange={(e) => setFilters({ ...filters, clientSearch: e.target.value })}
+          style={{ maxWidth: 220 }}
+        />
         </div>
         <Button variant="primary" onClick={() => setLoanOpen(true)}>
           <PlusIcon width={15} height={15} /> Registrar préstamo
@@ -116,12 +235,14 @@ function Receivables() {
           <PageLoading />
         ) : !debts || debts.length === 0 ? (
           <EmptyState title="Nadie te debe nada" description="Las deudas se crean automáticamente al vender a crédito." />
+        ) : filteredDebts.length === 0 ? (
+          <EmptyState title="Sin resultados" description="Ningún cliente coincide con la búsqueda." />
         ) : (
           <>
             <table className="table data-table">
               <thead><tr><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
               <tbody>
-                {debts.map((d) => {
+                {filteredDebts.map((d) => {
                   const pending = d.totalAmount - d.paidAmount;
                   const canPay = d.status === "PENDING" || d.status === "PARTIAL";
                   return (
@@ -133,11 +254,16 @@ function Receivables() {
                       <td>{formatDate(d.dueDate)}</td>
                       <td><Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge></td>
                       <td>
-                        {canPay && (
-                          <Button variant="secondary" size="sm" onClick={() => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
-                            Registrar abono
-                          </Button>
-                        )}
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <IconButton title="Historial de abonos" onClick={() => setHistoryTarget(d)}>
+                            <HistoryIcon width={15} height={15} />
+                          </IconButton>
+                          {canPay && (
+                            <Button variant="secondary" size="sm" onClick={() => { setPayTarget(d); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
+                              Registrar abono
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -146,7 +272,7 @@ function Receivables() {
             </table>
 
             <div className="list-cards">
-              {debts.map((d) => {
+              {filteredDebts.map((d) => {
                 const pending = d.totalAmount - d.paidAmount;
                 const canPay = d.status === "PENDING" || d.status === "PARTIAL";
                 return (
@@ -163,6 +289,9 @@ function Receivables() {
                       <span className="list-card-value">{formatMoney(pending, activeBusiness?.currency)}</span>
                       <Badge tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Badge>
                     </div>
+                    <IconButton title="Historial de abonos" onClick={(e) => { e.stopPropagation(); setHistoryTarget(d); }}>
+                      <HistoryIcon width={15} height={15} />
+                    </IconButton>
                   </div>
                 );
               })}
@@ -235,6 +364,17 @@ function Receivables() {
           </form>
         </Modal>
       )}
+
+      {historyTarget && (
+        <PaymentHistoryModal
+          title={`Historial de abonos de ${debtorLabel(historyTarget)}`}
+          currency={activeBusiness?.currency}
+          fetchPayments={() => financeApi.listDebtPayments(businessId, historyTarget.id)}
+          onUpdatePayment={(paymentId, payload) => financeApi.updateDebtPayment(businessId, historyTarget.id, paymentId, payload)}
+          onClose={() => setHistoryTarget(null)}
+          onChanged={reload}
+        />
+      )}
     </>
   );
 }
@@ -242,10 +382,13 @@ function Receivables() {
 function Payables() {
   const { activeBusiness } = useBusiness();
   const notify = useToast();
-  const [filters, setFilters] = useState({ status: "", payeeType: "" });
+  const [filters, setFilters] = useState({ status: "PARTIAL", payeeType: "", search: "" });
   const { data: providers } = useBusinessData((id) => providersApi.list(id));
   const { data: payables, loading, reload, businessId } = useBusinessData(
-    (id) => financeApi.listPayables(id, { status: filters.status || undefined, payeeType: filters.payeeType || undefined }),
+    (id) => financeApi.listPayables(id, {
+      status: filters.status || undefined,
+      payeeType: filters.payeeType || undefined,
+    }),
     [filters.status, filters.payeeType]
   );
 
@@ -253,12 +396,20 @@ function Payables() {
   const [payForm, setPayForm] = useState({ amount: "", paymentMethod: "CASH" });
   const [paying, setPaying] = useState(false);
 
+  const [historyTarget, setHistoryTarget] = useState(null);
+
   function providerName(id) {
     return providers?.find((p) => p.id === id)?.name || `#${id}`;
   }
   function payeeLabel(p) {
     return p.payeeType === "PROVIDER" ? providerName(p.providerId) : p.payeeName;
   }
+
+  const filteredPayables = useMemo(() => {
+    const search = filters.search.trim().toLowerCase();
+    if (!search) return payables || [];
+    return (payables || []).filter((p) => payeeLabel(p).toLowerCase().includes(search));
+  }, [payables, filters.search, providers]);
 
   const totalPending = (payables || [])
     .filter((p) => p.status === "PENDING" || p.status === "PARTIAL")
@@ -304,6 +455,11 @@ function Payables() {
           <option value="PROVIDER">Solo proveedores</option>
           <option value="OTHER">Solo otros</option>
         </Select>
+        <Input
+          placeholder="Buscar proveedor…"
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+        />
       </div>
 
       <Card>
@@ -311,12 +467,14 @@ function Payables() {
           <PageLoading />
         ) : !payables || payables.length === 0 ? (
           <EmptyState title="No debes nada" description="Las cuentas por pagar se crean desde una compra a crédito o un gasto marcado como no pagado." />
+        ) : filteredPayables.length === 0 ? (
+          <EmptyState title="Sin resultados" description="Ningún proveedor coincide con la búsqueda." />
         ) : (
           <>
             <table className="table data-table">
               <thead><tr><th>A quién</th><th>Origen</th><th>Total</th><th>Abonado</th><th>Saldo</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
               <tbody>
-                {payables.map((p) => {
+                {filteredPayables.map((p) => {
                   const pending = p.totalAmount - p.paidAmount;
                   const canPay = p.status === "PENDING" || p.status === "PARTIAL";
                   return (
@@ -329,11 +487,16 @@ function Payables() {
                       <td>{formatDate(p.dueDate)}</td>
                       <td><Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge></td>
                       <td>
-                        {canPay && (
-                          <Button variant="secondary" size="sm" onClick={() => { setPayTarget(p); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
-                            Registrar pago
-                          </Button>
-                        )}
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <IconButton title="Historial de pagos" onClick={() => setHistoryTarget(p)}>
+                            <HistoryIcon width={15} height={15} />
+                          </IconButton>
+                          {canPay && (
+                            <Button variant="secondary" size="sm" onClick={() => { setPayTarget(p); setPayForm({ amount: "", paymentMethod: "CASH" }); }}>
+                              Registrar pago
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -342,7 +505,7 @@ function Payables() {
             </table>
 
             <div className="list-cards">
-              {payables.map((p) => {
+              {filteredPayables.map((p) => {
                 const pending = p.totalAmount - p.paidAmount;
                 const canPay = p.status === "PENDING" || p.status === "PARTIAL";
                 return (
@@ -359,6 +522,9 @@ function Payables() {
                       <span className="list-card-value">{formatMoney(pending, activeBusiness?.currency)}</span>
                       <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>
                     </div>
+                    <IconButton title="Historial de pagos" onClick={(e) => { e.stopPropagation(); setHistoryTarget(p); }}>
+                      <HistoryIcon width={15} height={15} />
+                    </IconButton>
                   </div>
                 );
               })}
@@ -394,6 +560,17 @@ function Payables() {
             </Field>
           </form>
         </Modal>
+      )}
+
+      {historyTarget && (
+        <PaymentHistoryModal
+          title={`Historial de pagos a ${payeeLabel(historyTarget)}`}
+          currency={activeBusiness?.currency}
+          fetchPayments={() => financeApi.listPayablePayments(businessId, historyTarget.id)}
+          onUpdatePayment={(paymentId, payload) => financeApi.updatePayablePayment(businessId, historyTarget.id, paymentId, payload)}
+          onClose={() => setHistoryTarget(null)}
+          onChanged={reload}
+        />
       )}
     </>
   );

@@ -15,11 +15,25 @@ export const financeApi = {
       amount,
       paymentMethod,
     }),
+  listDebtPayments: (businessId, debtId) =>
+    api.get(`/businesses/${businessId}/debts/${debtId}/payments`),
+  updateDebtPayment: (businessId, debtId, paymentId, { amount, paymentMethod }) =>
+    api.patch(`/businesses/${businessId}/debts/${debtId}/payments/${paymentId}`, {
+      amount,
+      paymentMethod,
+    }),
 
   listPayables: (businessId, { status, payeeType, providerId } = {}) =>
     api.get(`/businesses/${businessId}/payables`, { status, payeeType, providerId }),
   payPayable: (businessId, payableId, { amount, paymentMethod }) =>
     api.post(`/businesses/${businessId}/payables/${payableId}/payments`, {
+      amount,
+      paymentMethod,
+    }),
+  listPayablePayments: (businessId, payableId) =>
+    api.get(`/businesses/${businessId}/payables/${payableId}/payments`),
+  updatePayablePayment: (businessId, payableId, paymentId, { amount, paymentMethod }) =>
+    api.patch(`/businesses/${businessId}/payables/${payableId}/payments/${paymentId}`, {
       amount,
       paymentMethod,
     }),

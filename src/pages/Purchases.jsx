@@ -31,10 +31,10 @@ export default function Purchases() {
     (products || []).forEach((p) => map.set(p.id, p));
     return map;
   }, [products]);
-  const [filters, setFilters] = useState({ providerId: "", status: "" });
+  const [filters, setFilters] = useState({ providerSearch: "", status: "" });
   const { data: purchases, loading, reload } = useBusinessData(
-    (id) => purchasesApi.list(id, { providerId: filters.providerId || undefined, status: filters.status || undefined }),
-    [filters.providerId, filters.status]
+    (id) => purchasesApi.list(id, { status: filters.status || undefined }),
+    [filters.status]
   );
   const { data: payables, reload: reloadPayables } = useBusinessData((id) => financeApi.listPayables(id));
   const payablesByPurchaseId = useMemo(() => {
@@ -55,6 +55,7 @@ export default function Purchases() {
   }
 
   const [open, setOpen] = useState(false);
+  const [editingPurchaseId, setEditingPurchaseId] = useState(null);
   const [providerId, setProviderId] = useState("");
   const [items, setItems] = useState([{ productId: "", productName: "", quantity: "1", unitCost: "" }]);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
@@ -97,12 +98,32 @@ export default function Purchases() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
   function resetForm() {
+    setEditingPurchaseId(null);
     setProviderId("");
     setItems([{ productId: "", productName: "", quantity: "1", unitCost: "" }]);
     setPaymentMethod("CASH");
     setPaidAmount("");
     setShippingCost("");
     setPurchaseDate(nowDateTimeLocal());
+  }
+
+  function openEditPurchase() {
+    const { purchase, items: purchaseItems } = detail;
+    setEditingPurchaseId(purchase.id);
+    setProviderId(String(purchase.providerId));
+    setItems(
+      purchaseItems.map((i) => ({
+        productId: String(i.productId),
+        productName: productsById.get(i.productId)?.name || `#${i.productId}`,
+        quantity: String(i.quantity),
+        unitCost: String(i.unitCost),
+      }))
+    );
+    setPaymentMethod(purchase.paymentMethod);
+    setPaidAmount(String(purchase.paidAmount));
+    setShippingCost(purchase.shippingCost ? String(purchase.shippingCost) : "");
+    setDetail(null);
+    setOpen(true);
   }
 
   async function handleSubmit(e) {
@@ -118,7 +139,7 @@ export default function Purchases() {
     }
     setSaving(true);
     try {
-      await purchasesApi.register(activeBusinessId, {
+      const payload = {
         providerId: Number(providerId),
         purchaseItems: validItems.map((i) => ({
           productId: Number(i.productId),
@@ -128,9 +149,14 @@ export default function Purchases() {
         paymentMethod,
         paidAmount: paidAmount === "" ? total : Number(paidAmount),
         shippingCost: Number(shippingCost) || 0,
-        createdAt: purchaseDate || undefined,
-      });
-      notify.success("Compra registrada. El stock ya se actualizó.");
+      };
+      if (editingPurchaseId) {
+        await purchasesApi.update(activeBusinessId, editingPurchaseId, payload);
+        notify.success("Compra actualizada. El stock ya se ajustó.");
+      } else {
+        await purchasesApi.register(activeBusinessId, { ...payload, createdAt: purchaseDate || undefined });
+        notify.success("Compra registrada. El stock ya se actualizó.");
+      }
       resetForm();
       setOpen(false);
       reload();
@@ -145,6 +171,12 @@ export default function Purchases() {
   function providerName(id) {
     return providers?.find((p) => p.id === id)?.name || `#${id}`;
   }
+
+  const filteredPurchases = useMemo(() => {
+    const search = filters.providerSearch.trim().toLowerCase();
+    if (!search) return purchases || [];
+    return (purchases || []).filter((p) => providerName(p.providerId).toLowerCase().includes(search));
+  }, [purchases, filters.providerSearch, providers]);
 
   async function openDetail(purchaseId) {
     try {
@@ -222,10 +254,11 @@ export default function Purchases() {
       />
       <div className="page-content">
         <div className="filters-row">
-          <Select value={filters.providerId} onChange={(e) => setFilters({ ...filters, providerId: e.target.value })}>
-            <option value="">Todos los proveedores</option>
-            {providers?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
+          <Input
+            placeholder="Buscar proveedor…"
+            value={filters.providerSearch}
+            onChange={(e) => setFilters({ ...filters, providerSearch: e.target.value })}
+          />
           <Select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
             <option value="">Todos los estados</option>
             <option value="PAID">Pagada</option>
@@ -239,12 +272,14 @@ export default function Purchases() {
             <PageLoading />
           ) : !purchases || purchases.length === 0 ? (
             <EmptyState title="Sin compras registradas" description="Registra tu primera compra a un proveedor." />
+          ) : filteredPurchases.length === 0 ? (
+            <EmptyState title="Sin resultados" description="Ningún proveedor coincide con la búsqueda." />
           ) : (
             <>
               <table className="table data-table">
                 <thead><tr><th>Fecha</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Estado</th><th></th></tr></thead>
                 <tbody>
-                  {purchases.map((p) => (
+                  {filteredPurchases.map((p) => (
                     <tr key={p.id} style={{ cursor: "pointer" }} onClick={() => openDetail(p.id)}>
                       <td>{formatDateTime(p.createdAt)}</td>
                       <td>{providerName(p.providerId)}</td>
@@ -258,7 +293,7 @@ export default function Purchases() {
               </table>
 
               <div className="list-cards">
-                {purchases.map((p) => (
+                {filteredPurchases.map((p) => (
                   <div className="list-card-row tappable" key={p.id} onClick={() => openDetail(p.id)}>
                     <div className="list-card-main">
                       <div className="list-card-title">{providerName(p.providerId)}</div>
@@ -278,13 +313,15 @@ export default function Purchases() {
 
       {open && (
         <Modal
-          title="Nueva compra"
+          title={editingPurchaseId ? `Editar compra #${editingPurchaseId}` : "Nueva compra"}
           wide
-          onClose={() => setOpen(false)}
+          onClose={() => { setOpen(false); resetForm(); }}
           footer={
             <>
-              <Button variant="outlined" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button variant="primary" loading={saving} onClick={handleSubmit}>Registrar compra</Button>
+              <Button variant="outlined" onClick={() => { setOpen(false); resetForm(); }}>Cancelar</Button>
+              <Button variant="primary" loading={saving} onClick={handleSubmit}>
+                {editingPurchaseId ? "Guardar cambios" : "Registrar compra"}
+              </Button>
             </>
           }
         >
@@ -329,14 +366,16 @@ export default function Purchases() {
               <Field label="Costo de envío">
                 <Input type="number" min="0" step="0.01" placeholder="0" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} />
               </Field>
-              <Field label="Fecha de la compra">
-                <Input
-                  type="datetime-local"
-                  value={purchaseDate}
-                  max={nowDateTimeLocal()}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                />
-              </Field>
+              {!editingPurchaseId && (
+                <Field label="Fecha de la compra">
+                  <Input
+                    type="datetime-local"
+                    value={purchaseDate}
+                    max={nowDateTimeLocal()}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                  />
+                </Field>
+              )}
               <Field label={`Monto pagado (total: ${formatMoney(total, currency)})`}>
                 <Input type="number" min="0" step="0.01" placeholder={String(total)} value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
               </Field>
@@ -362,6 +401,9 @@ export default function Purchases() {
                 <Button variant="outlined" loading={exporting} onClick={handleDownloadReceipt}>
                   Descargar recibo
                 </Button>
+                {status !== "CANCELLED" && (
+                  <Button variant="outlined" onClick={openEditPurchase}>Editar compra</Button>
+                )}
                 {canPay && (
                   <Button variant="primary" onClick={() => setShowPay(true)}>Registrar abono</Button>
                 )}

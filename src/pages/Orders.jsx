@@ -225,10 +225,9 @@ export default function Orders() {
     e.preventDefault();
     setConvertingSale(true);
     try {
-      const total = saleTarget.quantity * itemSaleUnitPrice(saleTarget);
       const res = await ordersApi.convertItemToSale(activeBusinessId, detail.order.id, saleTarget.id, {
         paymentMethod: saleForm.paymentMethod,
-        paidAmount: saleForm.paidAmount === "" ? total : Number(saleForm.paidAmount),
+        paidAmount: saleForm.paidAmount === "" ? 0 : Number(saleForm.paidAmount),
       });
       notify.success(`Venta #${res.sale.id} registrada.`);
       setSaleTarget(null);
@@ -568,7 +567,8 @@ export default function Orders() {
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder={String(saleTarget.quantity * itemSaleUnitPrice(saleTarget))}
+                max={saleTarget.quantity * itemSaleUnitPrice(saleTarget)}
+                placeholder="0"
                 value={saleForm.paidAmount}
                 onChange={(e) => setSaleForm({ ...saleForm, paidAmount: e.target.value })}
               />

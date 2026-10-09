@@ -5,6 +5,7 @@ export const salesApi = {
     api.get(`/businesses/${businessId}/sales`, { status, clientId, from, to }),
   get: (businessId, saleId) => api.get(`/businesses/${businessId}/sales/${saleId}`),
   register: (businessId, payload) => api.post(`/businesses/${businessId}/sales`, payload),
+  update: (businessId, saleId, payload) => api.put(`/businesses/${businessId}/sales/${saleId}`, payload),
   cancel: (businessId, saleId) => api.post(`/businesses/${businessId}/sales/${saleId}/cancel`),
   updateDate: (businessId, saleId, createdAt) =>
     api.patch(`/businesses/${businessId}/sales/${saleId}/date`, { createdAt }),
