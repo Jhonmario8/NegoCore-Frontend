@@ -1,4 +1,4 @@
-import { api, getToken, API_BASE_URL } from "./client";
+import { api, getToken, API_BASE_URL, ApiError, buildErrorMessage, NETWORK_ERROR_MESSAGE } from "./client";
 
 export const catalogApi = {
   listCategories: (businessId) => api.get(`/businesses/${businessId}/categories`),
@@ -25,21 +25,32 @@ export const catalogApi = {
     const formData = new FormData();
     formData.append("file", file);
     const token = getToken();
-    const res = await fetch(
-      `${API_BASE_URL}/businesses/${businessId}/products/${productId}/image`,
-      {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      }
-    );
+
+    let res;
+    try {
+      res = await fetch(
+        `${API_BASE_URL}/businesses/${businessId}/products/${productId}/image`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        }
+      );
+    } catch {
+      throw new ApiError(NETWORK_ERROR_MESSAGE, 0, null);
+    }
+
+    let data = null;
     const text = await res.text();
-    const data = text ? JSON.parse(text) : null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+    }
     if (!res.ok) {
-      const message = (data && (data.message || data.error)) || `Error ${res.status}`;
-      const err = new Error(message);
-      err.status = res.status;
-      throw err;
+      throw new ApiError(buildErrorMessage(res.status, data), res.status, data);
     }
     return data;
   },

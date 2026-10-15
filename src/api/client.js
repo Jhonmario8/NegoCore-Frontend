@@ -12,6 +12,42 @@ function getToken() {
   return localStorage.getItem("negocore_token");
 }
 
+export const NETWORK_ERROR_MESSAGE =
+  "No se pudo conectar con el servidor. Verifica que el backend esté corriendo en " + API_BASE_URL;
+
+const STATUS_MESSAGES = {
+  400: "La solicitud no es válida. Revisa los datos e inténtalo de nuevo.",
+  401: "Tu sesión ha expirado o no es válida. Inicia sesión nuevamente.",
+  403: "No tienes permiso para realizar esta acción.",
+  404: "No se encontró lo que buscas.",
+  405: "Esta acción no está permitida.",
+  409: "No se pudo completar la operación porque entra en conflicto con datos existentes.",
+  413: "El archivo es demasiado grande.",
+  415: "El tipo de archivo no es compatible.",
+};
+
+// Prioriza el mensaje que envía el backend (ya en español); si no hay, usa uno
+// genérico en español según el código HTTP, nunca el texto en inglés de Spring.
+export function buildErrorMessage(status, data) {
+  const backendMessage =
+    data && typeof data === "object" && typeof data.message === "string"
+      ? data.message.trim()
+      : "";
+
+  if (backendMessage) {
+    const details =
+      data.errors && typeof data.errors === "object" ? Object.values(data.errors) : [];
+    if (details.length > 0) {
+      return `${backendMessage.replace(/\.$/, "")}: ${details.join("; ")}`;
+    }
+    return backendMessage;
+  }
+
+  if (STATUS_MESSAGES[status]) return STATUS_MESSAGES[status];
+  if (status >= 500) return "Ocurrió un error en el servidor. Inténtalo de nuevo más tarde.";
+  return "Ocurrió un error inesperado. Inténtalo de nuevo.";
+}
+
 async function request(path, { method = "GET", body, params, auth = true } = {}) {
   let url = `${API_BASE_URL}${path}`;
   if (params) {
@@ -36,11 +72,7 @@ async function request(path, { method = "GET", body, params, auth = true } = {})
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new ApiError(
-      "No se pudo conectar con el servidor. Verifica que el backend esté corriendo en " + API_BASE_URL,
-      0,
-      null
-    );
+    throw new ApiError(NETWORK_ERROR_MESSAGE, 0, null);
   }
 
   if (res.status === 204) return null;
@@ -56,10 +88,7 @@ async function request(path, { method = "GET", body, params, auth = true } = {})
   }
 
   if (!res.ok) {
-    const message =
-      (data && (data.message || data.error || data.detail)) ||
-      `Error ${res.status}`;
-    throw new ApiError(message, res.status, data);
+    throw new ApiError(buildErrorMessage(res.status, data), res.status, data);
   }
 
   return data;
