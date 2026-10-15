@@ -97,7 +97,7 @@ function PaymentHistoryModal({ title, currency, fetchPayments, onUpdatePayment, 
           <form onSubmit={handleSaveEdit}>
             <Field label="Monto">
               <Input
-                type="number" min="0.01" step="0.01" required
+                type="number" min="0" step="0.01" required
                 value={editForm.amount}
                 onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
               />
